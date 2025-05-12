@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../controllers/product_controller.dart';
+import '../utils/toast_util.dart';
 
 class RentPage extends StatefulWidget {
   @override
@@ -82,7 +83,7 @@ class _RentPageState extends State<RentPage> {
                 });
                 Get.back();
               } else {
-                Get.snackbar('error'.tr, 'fill_all_fields_correctly'.tr);
+                ToastUtil.showError('fill_all_fields_correctly'.tr);
               }
             },
             child: Text('add'.tr),
@@ -94,11 +95,11 @@ class _RentPageState extends State<RentPage> {
 
   void _confirmRent() async {
     if (_personController.text.isEmpty) {
-      Get.snackbar('error'.tr, 'enter_person_name'.tr);
+      ToastUtil.showError('enter_person_name'.tr);
       return;
     }
     if (_rentList.isEmpty) {
-      Get.snackbar('error'.tr, 'no_products_to_rent'.tr);
+      ToastUtil.showError('no_products_to_rent'.tr);
       return;
     }
     for (var item in _rentList) {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../controllers/product_controller.dart';
+import '../utils/toast_util.dart';
 
 class ReturnPage extends StatefulWidget {
   @override
@@ -81,7 +82,7 @@ class _ReturnPageState extends State<ReturnPage> {
                 });
                 Get.back();
               } else {
-                Get.snackbar('error'.tr, 'fill_barcode_quantity'.tr);
+                ToastUtil.showError('fill_barcode_quantity'.tr);
               }
             },
             child: Text('add'.tr),
@@ -93,11 +94,11 @@ class _ReturnPageState extends State<ReturnPage> {
 
   void _confirmReturn() async {
     if (_personController.text.isEmpty) {
-      Get.snackbar('error'.tr, 'enter_person_name'.tr);
+      ToastUtil.showError('enter_person_name'.tr);
       return;
     }
     if (_returnList.isEmpty) {
-      Get.snackbar('error'.tr, 'no_products_to_return'.tr);
+      ToastUtil.showError('no_products_to_return'.tr);
       return;
     }
     for (var item in _returnList) {

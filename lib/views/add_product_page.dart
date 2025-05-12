@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../controllers/product_controller.dart';
 import '../models/product_model.dart';
+import '../utils/toast_util.dart';
 
 class AddProductPage extends StatefulWidget {
   @override
@@ -89,7 +90,7 @@ class _AddProductPageState extends State<AddProductPage> {
 
   void _submit() async {
     if (_barcodeController.text.isEmpty || _quantityController.text.isEmpty) {
-      Get.snackbar('error'.tr, 'fill_required_fields'.tr);
+      ToastUtil.showError('fill_required_fields'.tr);
       return;
     }
     final quantity = int.tryParse(_quantityController.text) ?? 0;
@@ -97,7 +98,7 @@ class _AddProductPageState extends State<AddProductPage> {
       await _controller.addExistingStock(_barcodeController.text, quantity);
     } else {
       if (_nameController.text.isEmpty || _priceController.text.isEmpty) {
-        Get.snackbar('error'.tr, 'fill_all_fields_new_product'.tr);
+        ToastUtil.showError('fill_all_fields_new_product'.tr);
         return;
       }
       final product = Product(

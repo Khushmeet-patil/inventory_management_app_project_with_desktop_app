@@ -3,6 +3,7 @@ import '../models/product_model.dart';
 import '../models/history_model.dart';
 import '../services/database_services.dart';
 import '../services/sync_service.dart';
+import '../utils/toast_util.dart';
 
 class ProductController extends GetxController {
   final DatabaseService _dbService = DatabaseService.instance;
@@ -38,7 +39,7 @@ class ProductController extends GetxController {
       print('Data loading complete');
     } catch (e) {
       print('Error loading data: $e');
-      Get.snackbar('Error', 'Failed to load data: $e');
+      ToastUtil.showError('Failed to load data: $e');
     }
   }
 
@@ -66,17 +67,17 @@ class ProductController extends GetxController {
 
       // Validate product data
       if (product.barcode.isEmpty) {
-        Get.snackbar('Error', 'Barcode cannot be empty');
+        ToastUtil.showError('Barcode cannot be empty');
         return;
       }
 
       if (product.name.isEmpty) {
-        Get.snackbar('Error', 'Product name cannot be empty');
+        ToastUtil.showError('Product name cannot be empty');
         return;
       }
 
       if (product.quantity <= 0) {
-        Get.snackbar('Error', 'Quantity must be greater than zero');
+        ToastUtil.showError('Quantity must be greater than zero');
         return;
       }
 
@@ -101,10 +102,10 @@ class ProductController extends GetxController {
       await syncAndReload();
 
       // Show success message
-      Get.snackbar('Success', 'Product added successfully');
+      ToastUtil.showSuccess('Product added successfully');
     } catch (e) {
       print('Error adding new product: $e');
-      Get.snackbar('Error', 'Failed to add product: $e');
+      ToastUtil.showError('Failed to add product: $e');
     }
   }
 
@@ -114,12 +115,12 @@ class ProductController extends GetxController {
 
       // Validate input
       if (barcode.isEmpty) {
-        Get.snackbar('Error', 'Barcode cannot be empty');
+        ToastUtil.showError('Barcode cannot be empty');
         return;
       }
 
       if (quantity <= 0) {
-        Get.snackbar('Error', 'Quantity must be greater than zero');
+        ToastUtil.showError('Quantity must be greater than zero');
         return;
       }
 
@@ -153,14 +154,14 @@ class ProductController extends GetxController {
         await syncAndReload();
 
         // Show success message
-        Get.snackbar('Success', 'Stock added successfully');
+        ToastUtil.showSuccess('Stock added successfully');
       } else {
         print('Product not found with barcode: $barcode');
-        Get.snackbar('Error', 'Product not found');
+        ToastUtil.showError('Product not found');
       }
     } catch (e) {
       print('Error adding existing stock: $e');
-      Get.snackbar('Error', 'Failed to add stock: $e');
+      ToastUtil.showError('Failed to add stock: $e');
     }
   }
 
@@ -170,22 +171,22 @@ class ProductController extends GetxController {
 
       // Validate input
       if (barcode.isEmpty) {
-        Get.snackbar('Error', 'Barcode cannot be empty');
+        ToastUtil.showError('Barcode cannot be empty');
         return;
       }
 
       if (quantity <= 0) {
-        Get.snackbar('Error', 'Quantity must be greater than zero');
+        ToastUtil.showError('Quantity must be greater than zero');
         return;
       }
 
       if (givenTo.isEmpty) {
-        Get.snackbar('Error', 'Recipient name cannot be empty');
+        ToastUtil.showError('Recipient name cannot be empty');
         return;
       }
 
       if (rentalDays <= 0) {
-        Get.snackbar('Error', 'Rental days must be greater than zero');
+        ToastUtil.showError('Rental days must be greater than zero');
         return;
       }
 
@@ -224,18 +225,18 @@ class ProductController extends GetxController {
           await syncAndReload();
 
           // Show success message
-          Get.snackbar('Success', 'Product rented successfully');
+          ToastUtil.showSuccess('Product rented successfully');
         } else {
           print('Insufficient stock: requested $quantity, available ${product.quantity}');
-          Get.snackbar('Error', 'Insufficient stock');
+          ToastUtil.showError('Insufficient stock');
         }
       } else {
         print('Product not found with barcode: $barcode');
-        Get.snackbar('Error', 'Product not found');
+        ToastUtil.showError('Product not found');
       }
     } catch (e) {
       print('Error renting product: $e');
-      Get.snackbar('Error', 'Failed to rent product: $e');
+      ToastUtil.showError('Failed to rent product: $e');
     }
   }
 
@@ -245,17 +246,17 @@ class ProductController extends GetxController {
 
       // Validate input
       if (barcode.isEmpty) {
-        Get.snackbar('Error', 'Barcode cannot be empty');
+        ToastUtil.showError('Barcode cannot be empty');
         return;
       }
 
       if (quantity <= 0) {
-        Get.snackbar('Error', 'Quantity must be greater than zero');
+        ToastUtil.showError('Quantity must be greater than zero');
         return;
       }
 
       if (returnedBy.isEmpty) {
-        Get.snackbar('Error', 'Returned by name cannot be empty');
+        ToastUtil.showError('Returned by name cannot be empty');
         return;
       }
 
@@ -293,14 +294,14 @@ class ProductController extends GetxController {
         await syncAndReload();
 
         // Show success message
-        Get.snackbar('Success', 'Product returned successfully');
+        ToastUtil.showSuccess('Product returned successfully');
       } else {
         print('Product not found with barcode: $barcode');
-        Get.snackbar('Error', 'Product not found');
+        ToastUtil.showError('Product not found');
       }
     } catch (e) {
       print('Error returning product: $e');
-      Get.snackbar('Error', 'Failed to return product: $e');
+      ToastUtil.showError('Failed to return product: $e');
     }
   }
 }
