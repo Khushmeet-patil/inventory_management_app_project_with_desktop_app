@@ -8,27 +8,27 @@ class CustomDrawer extends StatelessWidget {
       child: ListView(
         children: [
           DrawerHeader(
-            child: Text('Inventory Menu', style: TextStyle(fontSize: 24, color: Colors.white)),
+            child: Text('inventory_menu'.tr, style: TextStyle(fontSize: 24, color: Colors.white)),
             decoration: BoxDecoration(color: Colors.teal),
           ),
           ListTile(
             leading: Icon(Icons.inventory),
-            title: Text('View Stock'),
+            title: Text('view_stock'.tr),
             onTap: () => Get.toNamed('/stock'),
           ),
           ListTile(
             leading: Icon(Icons.shopping_cart),
-            title: Text('Rental History'),
+            title: Text('rental_history'.tr),
             onTap: () => Get.toNamed('/rental-history'),
           ),
           ListTile(
             leading: Icon(Icons.assignment_return),
-            title: Text('Return History'),
+            title: Text('return_history'.tr),
             onTap: () => Get.toNamed('/return-history'),
           ),
           ListTile(
             leading: Icon(Icons.add_box),
-            title: Text('Added Product History'),
+            title: Text('added_history'.tr),
             onTap: () => Get.toNamed('/added-history'),
           ),
         ],

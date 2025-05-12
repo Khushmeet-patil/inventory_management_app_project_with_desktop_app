@@ -25,13 +25,13 @@ class RentalHistoryPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Rental History'),
+        title: Text('rental_history'.tr),
         actions: [
           // Add a manual refresh button in the app bar
           IconButton(
             icon: Icon(Icons.refresh),
             onPressed: _refreshData,
-            tooltip: 'Sync Now',
+            tooltip: 'sync_now'.tr,
           ),
         ],
       ),

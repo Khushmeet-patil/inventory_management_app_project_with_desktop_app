@@ -21,7 +21,7 @@ class _RentPageState extends State<RentPage> {
 
     Get.dialog(
       AlertDialog(
-        title: Text('Add Product to Rent'),
+        title: Text('add_product_to_rent'.tr),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -29,7 +29,7 @@ class _RentPageState extends State<RentPage> {
               children: [
                 Expanded(
                   child: TextField(
-                    decoration: InputDecoration(labelText: 'Barcode'),
+                    decoration: InputDecoration(labelText: 'barcode'.tr),
                     onChanged: (value) => barcode = value,
                   ),
                 ),
@@ -58,12 +58,12 @@ class _RentPageState extends State<RentPage> {
               ],
             ),
             TextField(
-              decoration: InputDecoration(labelText: 'Quantity'),
+              decoration: InputDecoration(labelText: 'quantity'.tr),
               keyboardType: TextInputType.number,
               onChanged: (value) => quantity = int.tryParse(value) ?? 0,
             ),
             TextField(
-              decoration: InputDecoration(labelText: 'Rental Days'),
+              decoration: InputDecoration(labelText: 'rental_days'.tr),
               keyboardType: TextInputType.number,
               onChanged: (value) => rentalDays = int.tryParse(value) ?? 0,
             ),
@@ -82,10 +82,10 @@ class _RentPageState extends State<RentPage> {
                 });
                 Get.back();
               } else {
-                Get.snackbar('Error', 'Please fill all fields correctly');
+                Get.snackbar('error'.tr, 'fill_all_fields_correctly'.tr);
               }
             },
-            child: Text('Add'),
+            child: Text('add'.tr),
           ),
         ],
       ),
@@ -94,11 +94,11 @@ class _RentPageState extends State<RentPage> {
 
   void _confirmRent() async {
     if (_personController.text.isEmpty) {
-      Get.snackbar('Error', 'Please enter the person\'s name');
+      Get.snackbar('error'.tr, 'enter_person_name'.tr);
       return;
     }
     if (_rentList.isEmpty) {
-      Get.snackbar('Error', 'No products added to rent');
+      Get.snackbar('error'.tr, 'no_products_to_rent'.tr);
       return;
     }
     for (var item in _rentList) {
@@ -116,18 +116,18 @@ class _RentPageState extends State<RentPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Rent Products')),
+      appBar: AppBar(title: Text('rent_products'.tr)),
       body: Padding(
         padding: EdgeInsets.all(16.0),
         child: Column(
           children: [
             TextField(
               controller: _personController,
-              decoration: InputDecoration(labelText: 'Person\'s Name', prefixIcon: Icon(Icons.person)),
+              decoration: InputDecoration(labelText: 'person_name'.tr, prefixIcon: Icon(Icons.person)),
             ),
             TextField(
               controller: _agencyController,
-              decoration: InputDecoration(labelText: 'Agency Name (Optional)', prefixIcon: Icon(Icons.business)),
+              decoration: InputDecoration(labelText: 'agency_name_optional'.tr, prefixIcon: Icon(Icons.business)),
             ),
             SizedBox(height: 20),
             Expanded(
@@ -137,8 +137,8 @@ class _RentPageState extends State<RentPage> {
                   final item = _rentList[index];
                   return Card(
                     child: ListTile(
-                      title: Text('Barcode: ${item['barcode']}'),
-                      subtitle: Text('Qty: ${item['quantity']}, Days: ${item['rentalDays']}'),
+                      title: Text('barcode'.tr + ': ${item['barcode']}'),
+                      subtitle: Text('qty'.tr + ': ${item['quantity']}, ' + 'days'.tr + ': ${item['rentalDays']}'),
                       trailing: IconButton(
                         icon: Icon(Icons.delete, color: Colors.red),
                         onPressed: () => setState(() => _rentList.removeAt(index)),
@@ -154,12 +154,12 @@ class _RentPageState extends State<RentPage> {
               children: [
                 ElevatedButton.icon(
                   icon: Icon(Icons.add),
-                  label: Text('Add Product'),
+                  label: Text('add_product'.tr),
                   onPressed: _addProduct,
                 ),
                 ElevatedButton.icon(
                   icon: Icon(Icons.check),
-                  label: Text('Confirm Rent'),
+                  label: Text('confirm_rent'.tr),
                   onPressed: _confirmRent,
                 ),
               ],

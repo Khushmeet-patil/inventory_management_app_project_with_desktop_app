@@ -47,6 +47,7 @@ dependencies:
   http: ^1.1.0
   connectivity_plus: ^5.0.2
   fluttertoast: ^8.2.12
+  shared_preferences:
   # The following adds the Firebase Core and Analytics libraries
 
 dev_dependencies:

@@ -20,14 +20,14 @@ class _AddProductPageState extends State<AddProductPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Add Product')),
+      appBar: AppBar(title: Text('add_product'.tr)),
       body: Padding(
         padding: EdgeInsets.all(16.0),
         child: SingleChildScrollView(
           child: Column(
             children: [
               SwitchListTile(
-                title: Text('Add to Existing Product'),
+                title: Text('add_to_existing'.tr),
                 value: _isExisting,
                 onChanged: (value) => setState(() => _isExisting = value),
                 activeColor: Colors.teal,
@@ -35,7 +35,7 @@ class _AddProductPageState extends State<AddProductPage> {
               TextField(
                 controller: _barcodeController,
                 decoration: InputDecoration(
-                  labelText: 'Barcode',
+                  labelText: 'barcode'.tr,
                   suffixIcon: IconButton(
                     icon: Icon(Icons.qr_code_scanner),
                     onPressed: _scanBarcode,
@@ -43,22 +43,22 @@ class _AddProductPageState extends State<AddProductPage> {
                 ),
               ),
               if (!_isExisting) ...[
-                TextField(controller: _nameController, decoration: InputDecoration(labelText: 'Name')),
+                TextField(controller: _nameController, decoration: InputDecoration(labelText: 'name'.tr)),
                 TextField(
                   controller: _priceController,
-                  decoration: InputDecoration(labelText: 'Price per Quantity'),
+                  decoration: InputDecoration(labelText: 'price_per_quantity'.tr),
                   keyboardType: TextInputType.number,
                 ),
               ],
               TextField(
                 controller: _quantityController,
-                decoration: InputDecoration(labelText: 'Quantity'),
+                decoration: InputDecoration(labelText: 'quantity'.tr),
                 keyboardType: TextInputType.number,
               ),
               SizedBox(height: 20),
               ElevatedButton.icon(
                 icon: Icon(Icons.add),
-                label: Text(_isExisting ? 'Add Stock' : 'Add New Product'),
+                label: Text(_isExisting ? 'add_stock'.tr : 'add_new_product'.tr),
                 onPressed: _submit,
               ),
             ],
@@ -89,7 +89,7 @@ class _AddProductPageState extends State<AddProductPage> {
 
   void _submit() async {
     if (_barcodeController.text.isEmpty || _quantityController.text.isEmpty) {
-      Get.snackbar('Error', 'Please fill all required fields');
+      Get.snackbar('error'.tr, 'fill_required_fields'.tr);
       return;
     }
     final quantity = int.tryParse(_quantityController.text) ?? 0;
@@ -97,7 +97,7 @@ class _AddProductPageState extends State<AddProductPage> {
       await _controller.addExistingStock(_barcodeController.text, quantity);
     } else {
       if (_nameController.text.isEmpty || _priceController.text.isEmpty) {
-        Get.snackbar('Error', 'Please fill all fields for new product');
+        Get.snackbar('error'.tr, 'fill_all_fields_new_product'.tr);
         return;
       }
       final product = Product(

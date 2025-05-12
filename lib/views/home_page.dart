@@ -11,15 +11,15 @@ class HomePage extends StatelessWidget {
   Future<void> _refreshData() async {
     try {
       // Show syncing indicator
-      Get.snackbar('Syncing', 'Syncing data with server...', duration: Duration(seconds: 1));
+      Get.snackbar('syncing'.tr, 'syncing_message'.tr, duration: Duration(seconds: 1));
 
       // Sync with server and reload data
       await _controller.syncAndReload();
 
       // Show success message
-      Get.snackbar('Sync Complete', 'Data has been updated', duration: Duration(seconds: 1));
+      Get.snackbar('sync_complete'.tr, 'data_updated'.tr, duration: Duration(seconds: 1));
     } catch (e) {
-      Get.snackbar('Sync Error', 'Failed to sync: $e');
+      Get.snackbar('sync_error'.tr, 'sync_failed'.tr + ': $e');
     }
   }
 
@@ -27,14 +27,14 @@ class HomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Inventory Home'),
+        title: Text('app_title'.tr),
         centerTitle: true,
         actions: [
           // Add a manual refresh button in the app bar
           IconButton(
             icon: Icon(Icons.refresh),
             onPressed: _refreshData,
-            tooltip: 'Sync Now',
+            tooltip: 'sync_now'.tr,
           ),
         ],
       ),
@@ -55,7 +55,7 @@ class HomePage extends StatelessWidget {
                     Icon(Icons.inventory, color: Colors.teal),
                     SizedBox(width: 10),
                     Text(
-                      'Total Products: ${_controller.products.length}',
+                      'total_products'.tr + ': ${_controller.products.length}',
                       style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                     ),
                   ],
@@ -69,10 +69,10 @@ class HomePage extends StatelessWidget {
               crossAxisSpacing: 10,
               mainAxisSpacing: 10,
               children: [
-                _buildButton(context, 'Add Product', Icons.add, () => Get.toNamed('/add')),
-                _buildButton(context, 'Rent Product', Icons.shopping_cart, () => Get.toNamed('/rent')),
-                _buildButton(context, 'Return Product', Icons.assignment_return, () => Get.toNamed('/return')),
-                _buildButton(context, 'View Stock', Icons.inventory, () => Get.toNamed('/stock')),
+                _buildButton(context, 'add_product'.tr, Icons.add, () => Get.toNamed('/add')),
+                _buildButton(context, 'rent_product'.tr, Icons.shopping_cart, () => Get.toNamed('/rent')),
+                _buildButton(context, 'return_product'.tr, Icons.assignment_return, () => Get.toNamed('/return')),
+                _buildButton(context, 'view_stock'.tr, Icons.inventory, () => Get.toNamed('/stock')),
               ],
             ),
           ],

@@ -9,15 +9,15 @@ class AddedProductHistoryPage extends StatelessWidget {
   Future<void> _refreshData() async {
     try {
       // Show syncing indicator
-      Get.snackbar('Syncing', 'Syncing data with server...', duration: Duration(seconds: 1));
+      Get.snackbar('syncing'.tr, 'syncing_message'.tr, duration: Duration(seconds: 1));
 
       // Sync with server and reload data
       await _controller.syncAndReload();
 
       // Show success message
-      Get.snackbar('Sync Complete', 'Data has been updated', duration: Duration(seconds: 1));
+      Get.snackbar('sync_complete'.tr, 'data_updated'.tr, duration: Duration(seconds: 1));
     } catch (e) {
-      Get.snackbar('Sync Error', 'Failed to sync: $e');
+      Get.snackbar('sync_error'.tr, 'sync_failed'.tr + ': $e');
     }
   }
 
@@ -25,13 +25,13 @@ class AddedProductHistoryPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Added Product History'),
+        title: Text('added_history'.tr),
         actions: [
           // Add a manual refresh button in the app bar
           IconButton(
             icon: Icon(Icons.refresh),
             onPressed: _refreshData,
-            tooltip: 'Sync Now',
+            tooltip: 'sync_now'.tr,
           ),
         ],
       ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/settings_controller.dart';
+import '../controllers/language_controller.dart';
 import '../models/sync_model.dart';
 
 class ResponsiveLayout extends StatelessWidget {
@@ -27,13 +28,14 @@ class ResponsiveLayout extends StatelessWidget {
 }
 
 class SettingsPage extends StatelessWidget {
-  final SettingsController _controller = Get.put(SettingsController());
+  final SettingsController _controller = Get.find<SettingsController>();
+  final LanguageController _languageController = Get.find<LanguageController>();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Network Settings'),
+        title: Text('settings_title'.tr),
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
@@ -48,6 +50,8 @@ class SettingsPage extends StatelessWidget {
                   mobile: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      _buildLanguageSection(),
+                      const SizedBox(height: 16),
                       _buildDeviceInfoSection(),
                       const SizedBox(height: 16),
                       _buildNetworkModeSection(),
@@ -60,6 +64,8 @@ class SettingsPage extends StatelessWidget {
                   desktop: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      _buildLanguageSection(),
+                      const SizedBox(height: 16),
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -107,9 +113,9 @@ class SettingsPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Device Information',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            Text(
+              'device_info'.tr,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             LayoutBuilder(
@@ -121,7 +127,7 @@ class SettingsPage extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          const Text('Device Name: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                          Text('device_name'.tr + ': ', style: const TextStyle(fontWeight: FontWeight.bold)),
                           IconButton(
                             icon: const Icon(Icons.edit, size: 18),
                             padding: EdgeInsets.zero,
@@ -132,7 +138,7 @@ class SettingsPage extends StatelessWidget {
                       ),
                       Obx(() => Text(_controller.deviceName.value)),
                       const SizedBox(height: 8),
-                      const Text('IP Address: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                      Text('ip_address'.tr + ': ', style: const TextStyle(fontWeight: FontWeight.bold)),
                       Obx(() => Text(_controller.ipAddress.value)),
                       const SizedBox(height: 8),
                       _buildManualIpSection(compact: true),
@@ -145,7 +151,7 @@ class SettingsPage extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          const Text('Device Name: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                          Text('device_name'.tr + ': ', style: const TextStyle(fontWeight: FontWeight.bold)),
                           Expanded(
                             child: Obx(() => Text(_controller.deviceName.value)),
                           ),
@@ -158,7 +164,7 @@ class SettingsPage extends StatelessWidget {
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          const Text('IP Address: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                          Text('ip_address'.tr + ': ', style: const TextStyle(fontWeight: FontWeight.bold)),
                           Expanded(
                             child: Obx(() => Text(_controller.ipAddress.value)),
                           ),
@@ -187,7 +193,7 @@ class SettingsPage extends StatelessWidget {
               value: _controller.useManualIp.value,
               onChanged: (value) => _controller.toggleUseManualIp(value ?? false),
             )),
-            const Text('Use Manual IP', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text('use_manual_ip'.tr, style: const TextStyle(fontWeight: FontWeight.bold)),
           ],
         ),
         Obx(() => _controller.useManualIp.value
@@ -197,10 +203,10 @@ class SettingsPage extends StatelessWidget {
                   children: [
                     Expanded(
                       child: TextField(
-                        decoration: const InputDecoration(
-                          labelText: 'Manual IP Address',
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: InputDecoration(
+                          labelText: 'manual_ip_address'.tr,
+                          border: const OutlineInputBorder(),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                         ),
                         controller: TextEditingController(text: _controller.manualIpAddress.value),
                         onSubmitted: (value) => _controller.setManualIpAddress(value),
@@ -226,9 +232,9 @@ class SettingsPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Network Mode',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            Text(
+              'network_mode'.tr,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             LayoutBuilder(
@@ -246,7 +252,7 @@ class SettingsPage extends StatelessWidget {
                           )),
                           Expanded(
                             child: Obx(() => Text(
-                              _controller.isServer.value ? 'Server Mode' : 'Client Mode',
+                              _controller.isServer.value ? 'server_mode'.tr : 'client_mode'.tr,
                               style: const TextStyle(fontWeight: FontWeight.bold),
                               overflow: TextOverflow.ellipsis,
                             )),
@@ -254,14 +260,14 @@ class SettingsPage extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 8),
-                      const Text(
-                        'Server Mode: This device will store the main database and serve other devices.',
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      Text(
+                        'server_description'.tr,
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
                       ),
                       const SizedBox(height: 4),
-                      const Text(
-                        'Client Mode: This device will sync with the server.',
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      Text(
+                        'client_description'.tr,
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
                       ),
                       const SizedBox(height: 16),
                       SizedBox(
@@ -271,8 +277,8 @@ class SettingsPage extends StatelessWidget {
                               ? null
                               : () => _controller.initialize(),
                           child: Text(_controller.isInitialized.value
-                              ? 'Network Initialized'
-                              : 'Initialize Network'),
+                              ? 'network_initialized'.tr
+                              : 'initialize_network'.tr),
                         )),
                       ),
                     ],
@@ -290,21 +296,21 @@ class SettingsPage extends StatelessWidget {
                           )),
                           Expanded(
                             child: Obx(() => Text(
-                              _controller.isServer.value ? 'Server Mode (Desktop)' : 'Client Mode (Mobile)',
+                              _controller.isServer.value ? 'server_mode_desktop'.tr : 'client_mode_mobile'.tr,
                               style: const TextStyle(fontWeight: FontWeight.bold),
                             )),
                           ),
                         ],
                       ),
                       const SizedBox(height: 8),
-                      const Text(
-                        'Server Mode: This device will store the main database and serve other devices.',
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      Text(
+                        'server_description'.tr,
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
                       ),
                       const SizedBox(height: 4),
-                      const Text(
-                        'Client Mode: This device will sync with the server.',
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      Text(
+                        'client_description'.tr,
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
                       ),
                       const SizedBox(height: 16),
                       SizedBox(
@@ -314,8 +320,8 @@ class SettingsPage extends StatelessWidget {
                               ? null
                               : () => _controller.initialize(),
                           child: Text(_controller.isInitialized.value
-                              ? 'Network Initialized'
-                              : 'Initialize Network'),
+                              ? 'network_initialized'.tr
+                              : 'initialize_network'.tr),
                         )),
                       ),
                     ],
@@ -336,9 +342,9 @@ class SettingsPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Synchronization',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            Text(
+              'synchronization'.tr,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             LayoutBuilder(
@@ -348,10 +354,10 @@ class SettingsPage extends StatelessWidget {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Status: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                      Text('status'.tr + ': ', style: const TextStyle(fontWeight: FontWeight.bold)),
                       Obx(() => Text(_controller.syncStatus, overflow: TextOverflow.ellipsis)),
                       const SizedBox(height: 8),
-                      const Text('Pending Items: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                      Text('pending_items'.tr + ': ', style: const TextStyle(fontWeight: FontWeight.bold)),
                       Obx(() => Text('${_controller.pendingSyncItems}')),
                       const SizedBox(height: 16),
                       SizedBox(
@@ -366,7 +372,7 @@ class SettingsPage extends StatelessWidget {
                                   height: 20,
                                   child: CircularProgressIndicator(strokeWidth: 2),
                                 )
-                              : const Text('Sync Now'),
+                              : Text('sync_now'.tr),
                         )),
                       ),
                     ],
@@ -378,7 +384,7 @@ class SettingsPage extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          const Text('Status: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                          Text('status'.tr + ': ', style: const TextStyle(fontWeight: FontWeight.bold)),
                           Expanded(
                             child: Obx(() => Text(_controller.syncStatus, overflow: TextOverflow.ellipsis)),
                           ),
@@ -387,7 +393,7 @@ class SettingsPage extends StatelessWidget {
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          const Text('Pending Items: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                          Text('pending_items'.tr + ': ', style: const TextStyle(fontWeight: FontWeight.bold)),
                           Obx(() => Text('${_controller.pendingSyncItems}')),
                         ],
                       ),
@@ -404,7 +410,7 @@ class SettingsPage extends StatelessWidget {
                                   height: 20,
                                   child: CircularProgressIndicator(strokeWidth: 2),
                                 )
-                              : const Text('Sync Now'),
+                              : Text('sync_now'.tr),
                         )),
                       ),
                     ],
@@ -428,9 +434,9 @@ class SettingsPage extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Discovered Devices',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                Text(
+                  'discovered_devices'.tr,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 Obx(() => ElevatedButton(
                   onPressed: _controller.isDiscovering.value || !_controller.isInitialized.value
@@ -442,7 +448,7 @@ class SettingsPage extends StatelessWidget {
                           height: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Discover'),
+                      : Text('discover'.tr),
                 )),
               ],
             ),
@@ -452,7 +458,7 @@ class SettingsPage extends StatelessWidget {
             SizedBox(
               height: 300, // Fixed height for mobile
               child: Obx(() => _controller.discoveredDevices.isEmpty
-                  ? const Center(child: Text('No devices discovered'))
+                  ? Center(child: Text('no_devices'.tr))
                   : ListView.builder(
                       itemCount: _controller.discoveredDevices.length,
                       itemBuilder: (context, index) {
@@ -478,9 +484,9 @@ class SettingsPage extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Discovered Devices',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                Text(
+                  'discovered_devices'.tr,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 Obx(() => ElevatedButton(
                   onPressed: _controller.isDiscovering.value || !_controller.isInitialized.value
@@ -492,7 +498,7 @@ class SettingsPage extends StatelessWidget {
                           height: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Discover'),
+                      : Text('discover'.tr),
                 )),
               ],
             ),
@@ -502,7 +508,7 @@ class SettingsPage extends StatelessWidget {
             SizedBox(
               height: 400, // Taller for desktop
               child: Obx(() => _controller.discoveredDevices.isEmpty
-                  ? const Center(child: Text('No devices discovered'))
+                  ? Center(child: Text('no_devices'.tr))
                   : ListView.builder(
                       itemCount: _controller.discoveredDevices.length,
                       itemBuilder: (context, index) {
@@ -526,18 +532,18 @@ class SettingsPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Can\'t find server? Enter IP manually:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+          Text('manual_server_prompt'.tr, style: const TextStyle(fontSize: 12, color: Colors.grey)),
           const SizedBox(height: 4),
           Row(
             children: [
               Expanded(
                 child: TextField(
                   controller: textController,
-                  decoration: const InputDecoration(
-                    labelText: 'Server IP Address',
-                    hintText: 'e.g., 192.168.1.100',
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: InputDecoration(
+                    labelText: 'server_ip_label'.tr,
+                    hintText: 'server_ip_hint'.tr,
+                    border: const OutlineInputBorder(),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   ),
                   onSubmitted: (value) {
                     if (value.isNotEmpty) {
@@ -573,7 +579,7 @@ class SettingsPage extends StatelessWidget {
       title: Text(device.name),
       subtitle: Text('${device.ipAddress}:${device.port}'),
       trailing: Text(
-        device.role == DeviceRole.server ? 'Server' : 'Client',
+        device.role == DeviceRole.server ? 'server'.tr : 'client'.tr,
         style: TextStyle(
           color: device.role == DeviceRole.server
               ? Colors.red
@@ -590,27 +596,79 @@ class SettingsPage extends StatelessWidget {
 
     Get.dialog(
       AlertDialog(
-        title: const Text('Change Device Name'),
+        title: Text('change_device_name'.tr),
         content: TextField(
           controller: textController,
-          decoration: const InputDecoration(
-            labelText: 'Device Name',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: 'device_name'.tr,
+            border: const OutlineInputBorder(),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Get.back(),
-            child: const Text('Cancel'),
+            child: Text('cancel'.tr),
           ),
           ElevatedButton(
             onPressed: () {
               _controller.setDeviceName(textController.text);
               Get.back();
             },
-            child: const Text('Save'),
+            child: Text('save'.tr),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildLanguageSection() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'language_settings'.tr,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Text('current_language'.tr + ': ', style: const TextStyle(fontWeight: FontWeight.bold)),
+                Obx(() => Text(
+                  '${_languageController.getLanguageFlag(_languageController.currentLanguage.value)} '
+                  '${_languageController.getLanguageName(_languageController.currentLanguage.value)}',
+                )),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text('select_language'.tr, style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8.0,
+              runSpacing: 8.0,
+              children: _languageController.availableLanguages.map((language) {
+                return InkWell(
+                  onTap: () => _languageController.changeLanguage(language['code']),
+                  child: Chip(
+                    backgroundColor: _languageController.currentLanguage.value == language['code']
+                        ? Colors.teal.shade100
+                        : null,
+                    avatar: Text(language['flag']),
+                    label: Text(language['name']),
+                    side: BorderSide(
+                      color: _languageController.currentLanguage.value == language['code']
+                          ? Colors.teal
+                          : Colors.grey.shade300,
+                      width: _languageController.currentLanguage.value == language['code'] ? 2 : 1,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
       ),
     );
   }

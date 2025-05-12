@@ -21,7 +21,7 @@ class _ReturnPageState extends State<ReturnPage> {
 
     Get.dialog(
       AlertDialog(
-        title: Text('Add Product to Return'),
+        title: Text('add_product_to_return'.tr),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -29,7 +29,7 @@ class _ReturnPageState extends State<ReturnPage> {
               children: [
                 Expanded(
                   child: TextField(
-                    decoration: InputDecoration(labelText: 'Barcode'),
+                    decoration: InputDecoration(labelText: 'barcode'.tr),
                     onChanged: (value) => barcode = value,
                   ),
                 ),
@@ -58,12 +58,12 @@ class _ReturnPageState extends State<ReturnPage> {
               ],
             ),
             TextField(
-              decoration: InputDecoration(labelText: 'Quantity'),
+              decoration: InputDecoration(labelText: 'quantity'.tr),
               keyboardType: TextInputType.number,
               onChanged: (value) => quantity = int.tryParse(value) ?? 0,
             ),
             TextField(
-              decoration: InputDecoration(labelText: 'Notes (Optional)'),
+              decoration: InputDecoration(labelText: 'notes_optional'.tr),
               onChanged: (value) => notes = value,
             ),
           ],
@@ -81,10 +81,10 @@ class _ReturnPageState extends State<ReturnPage> {
                 });
                 Get.back();
               } else {
-                Get.snackbar('Error', 'Please fill barcode and quantity');
+                Get.snackbar('error'.tr, 'fill_barcode_quantity'.tr);
               }
             },
-            child: Text('Add'),
+            child: Text('add'.tr),
           ),
         ],
       ),
@@ -93,11 +93,11 @@ class _ReturnPageState extends State<ReturnPage> {
 
   void _confirmReturn() async {
     if (_personController.text.isEmpty) {
-      Get.snackbar('Error', 'Please enter the person\'s name');
+      Get.snackbar('error'.tr, 'enter_person_name'.tr);
       return;
     }
     if (_returnList.isEmpty) {
-      Get.snackbar('Error', 'No products added to return');
+      Get.snackbar('error'.tr, 'no_products_to_return'.tr);
       return;
     }
     for (var item in _returnList) {
@@ -115,18 +115,18 @@ class _ReturnPageState extends State<ReturnPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Return Products')),
+      appBar: AppBar(title: Text('return_products'.tr)),
       body: Padding(
         padding: EdgeInsets.all(16.0),
         child: Column(
           children: [
             TextField(
               controller: _personController,
-              decoration: InputDecoration(labelText: 'Returned By', prefixIcon: Icon(Icons.person)),
+              decoration: InputDecoration(labelText: 'returned_by'.tr, prefixIcon: Icon(Icons.person)),
             ),
             TextField(
               controller: _agencyController,
-              decoration: InputDecoration(labelText: 'Agency Name (Optional)', prefixIcon: Icon(Icons.business)),
+              decoration: InputDecoration(labelText: 'agency_name_optional'.tr, prefixIcon: Icon(Icons.business)),
             ),
             SizedBox(height: 20),
             Expanded(
@@ -136,8 +136,8 @@ class _ReturnPageState extends State<ReturnPage> {
                   final item = _returnList[index];
                   return Card(
                     child: ListTile(
-                      title: Text('Barcode: ${item['barcode']}'),
-                      subtitle: Text('Qty: ${item['quantity']}, Notes: ${item['notes'].isEmpty ? 'N/A' : item['notes']}'),
+                      title: Text('barcode'.tr + ': ${item['barcode']}'),
+                      subtitle: Text('qty'.tr + ': ${item['quantity']}, ' + 'notes'.tr + ': ${item['notes'].isEmpty ? 'n_a'.tr : item['notes']}'),
                       trailing: IconButton(
                         icon: Icon(Icons.delete, color: Colors.red),
                         onPressed: () => setState(() => _returnList.removeAt(index)),
@@ -153,12 +153,12 @@ class _ReturnPageState extends State<ReturnPage> {
               children: [
                 ElevatedButton.icon(
                   icon: Icon(Icons.add),
-                  label: Text('Add Product'),
+                  label: Text('add_product'.tr),
                   onPressed: _addProduct,
                 ),
                 ElevatedButton.icon(
                   icon: Icon(Icons.check),
-                  label: Text('Confirm Return'),
+                  label: Text('confirm_return'.tr),
                   onPressed: _confirmReturn,
                 ),
               ],
