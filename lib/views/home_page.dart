@@ -2,9 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/product_controller.dart';
 import '../widgets/custom_drawer.dart';
+import '../services/sync_service.dart';
 
 class HomePage extends StatelessWidget {
   final ProductController _controller = Get.find();
+  final SyncService _syncService = SyncService.instance;
+
+  Future<void> _refreshData() async {
+    try {
+      // Show syncing indicator
+      Get.snackbar('Syncing', 'Syncing data with server...', duration: Duration(seconds: 1));
+
+      // Sync with server and reload data
+      await _controller.syncAndReload();
+
+      // Show success message
+      Get.snackbar('Sync Complete', 'Data has been updated', duration: Duration(seconds: 1));
+    } catch (e) {
+      Get.snackbar('Sync Error', 'Failed to sync: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -12,12 +29,23 @@ class HomePage extends StatelessWidget {
       appBar: AppBar(
         title: Text('Inventory Home'),
         centerTitle: true,
+        actions: [
+          // Add a manual refresh button in the app bar
+          IconButton(
+            icon: Icon(Icons.refresh),
+            onPressed: _refreshData,
+            tooltip: 'Sync Now',
+          ),
+        ],
       ),
       drawer: CustomDrawer(),
-      body: Padding(
-        padding: EdgeInsets.all(16.0),
-        child: Column(
-          children: [
+      body: RefreshIndicator(
+        onRefresh: _refreshData,
+        child: Padding(
+          padding: EdgeInsets.all(16.0),
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
             Obx(() => Card(
               child: Padding(
                 padding: EdgeInsets.all(16.0),
@@ -48,6 +76,7 @@ class HomePage extends StatelessWidget {
               ],
             ),
           ],
+          ),
         ),
       ),
     );

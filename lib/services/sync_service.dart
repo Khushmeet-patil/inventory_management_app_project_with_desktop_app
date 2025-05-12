@@ -22,7 +22,7 @@ class SyncService {
 
   // Sync timer
   Timer? _syncTimer;
-  final int syncIntervalSeconds = 30;
+  final int syncIntervalSeconds = 5; // Reduced to 5 seconds for more frequent syncing
 
   SyncService._init();
 
@@ -62,13 +62,30 @@ class SyncService {
   }
 
   Future<void> syncWithServer() async {
-    if (isSyncing.value) return;
+    // If already syncing, wait a bit and return
+    if (isSyncing.value) {
+      print('Sync already in progress, waiting...');
+      await Future.delayed(Duration(milliseconds: 500));
+      if (isSyncing.value) {
+        print('Sync still in progress after waiting, skipping this request');
+        return;
+      }
+    }
 
     isSyncing.value = true;
     syncStatus.value = 'Syncing...';
     print('Starting sync process');
 
     try {
+      // First try to discover devices to ensure we have the latest server info
+      try {
+        print('Discovering devices before sync...');
+        await _networkService.discoverDevices();
+      } catch (e) {
+        print('Error discovering devices: $e');
+        // Continue anyway
+      }
+
       // Find server devices
       final servers = await _networkService.getServerDevices();
       print('Found ${servers.length} servers for sync');
@@ -110,6 +127,12 @@ class SyncService {
       for (final server in servers) {
         print('Trying to sync with server: ${server.name} (${server.ipAddress})');
         try {
+          // First try to ping the server
+          final pingSuccess = await _networkService.pingDevice(server.ipAddress, server.port);
+          if (!pingSuccess) {
+            print('Warning: Could not ping server ${server.ipAddress}. Will try to sync anyway.');
+          }
+
           // Send to server
           final success = await _networkService.sendSyncBatch(server, testBatch);
 
@@ -143,6 +166,19 @@ class SyncService {
 
       if (!syncSuccess) {
         syncStatus.value = 'Sync failed: $errorMessage';
+      } else {
+        // If we're a server, also propagate to all clients
+        if (_networkService.deviceRole == DeviceRole.server) {
+          print('We are a server, propagating changes to all clients');
+          // Create an empty batch to trigger sending all data to clients
+          final emptyBatch = SyncBatch(
+            id: const Uuid().v4(),
+            deviceId: _networkService.deviceId,
+            items: [],
+            timestamp: DateTime.now(),
+          );
+          await _propagateChangesToClients(emptyBatch);
+        }
       }
     } catch (e) {
       print('Sync error: $e');
@@ -182,6 +218,20 @@ class SyncService {
 
         // Reload product data in UI
         await _reloadProductData();
+
+        // Show a notification if there are items in the batch
+        if (batch.items.isNotEmpty) {
+          try {
+            Get.snackbar(
+              'Data Updated',
+              'Received ${batch.items.length} updates from server',
+              duration: Duration(seconds: 2),
+              snackPosition: SnackPosition.BOTTOM,
+            );
+          } catch (e) {
+            print('Error showing notification: $e');
+          }
+        }
       } else {
         // We're a server processing items from a client
         print('Server processing ${batch.items.length} items from client');
@@ -190,6 +240,9 @@ class SyncService {
         for (final item in batch.items) {
           await _processSyncItem(item);
         }
+
+        // Reload our own data first
+        await _reloadProductData();
 
         // Propagate changes to other clients
         print('Propagating changes to other clients');
@@ -329,21 +382,52 @@ class SyncService {
   }
 
   Future<void> _propagateChangesToClients(SyncBatch originalBatch) async {
-    // Get all client devices
-    final clients = _networkService.knownDevices
+    // Get all client devices from both known devices and database
+    final knownClients = _networkService.knownDevices
         .where((device) =>
             device.role == DeviceRole.client &&
             device.id != originalBatch.deviceId)
         .toList();
 
-    print('Found ${clients.length} clients to propagate changes to');
-    if (clients.isEmpty) return;
+    print('Found ${knownClients.length} known clients to propagate changes to');
+
+    // Also try to get clients from database as fallback
+    final dbDevices = await _dbService.getAllDevices();
+    final dbClients = dbDevices.where((d) =>
+      d.role == DeviceRole.client &&
+      d.id != _networkService.deviceId &&
+      d.id != originalBatch.deviceId &&
+      !knownClients.any((kc) => kc.id == d.id) // Avoid duplicates
+    ).toList();
+
+    print('Found ${dbClients.length} additional clients from database');
+
+    // Combine both lists
+    final allClients = [...knownClients, ...dbClients];
+
+    if (allClients.isEmpty) {
+      print('No clients found to propagate changes to');
+      return;
+    }
+
+    print('Propagating changes to ${allClients.length} total clients');
 
     // Send to each client
-    for (final client in clients) {
-      print('Propagating changes to client: ${client.name} (${client.ipAddress})');
-      final success = await _networkService.sendSyncBatch(client, originalBatch);
-      print('Propagation to ${client.name} ${success ? 'successful' : 'failed'}');
+    for (final client in allClients) {
+      try {
+        print('Propagating changes to client: ${client.name} (${client.ipAddress})');
+        final success = await _networkService.sendSyncBatch(client, originalBatch);
+        print('Propagation to ${client.name} ${success ? 'successful' : 'failed'}');
+
+        // If successful, also send a complete data set to ensure client has everything
+        if (success) {
+          print('Sending complete data set to client ${client.id}');
+          await _sendProductsToClient(client.id);
+        }
+      } catch (e) {
+        print('Error propagating changes to client ${client.name}: $e');
+        // Continue with next client
+      }
     }
   }
 
@@ -445,6 +529,12 @@ class SyncService {
     } catch (e) {
       print('Error reloading data: $e');
     }
+  }
+
+  // Method for immediate sync - called by ProductController
+  Future<void> syncImmediately() async {
+    print('Immediate sync requested');
+    await forceSync();
   }
 
   Future<void> forceSync() async {

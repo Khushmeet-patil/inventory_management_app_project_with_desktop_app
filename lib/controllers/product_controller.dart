@@ -42,6 +42,20 @@ class ProductController extends GetxController {
     }
   }
 
+  // Sync data with server and reload
+  Future<void> syncAndReload() async {
+    try {
+      print('Syncing data with server...');
+      await _syncService.syncImmediately();
+      print('Sync complete, reloading data...');
+      await loadData();
+    } catch (e) {
+      print('Error during sync and reload: $e');
+      // Still try to reload data even if sync fails
+      await loadData();
+    }
+  }
+
   Future<Product?> getProductByBarcode(String barcode) async {
     return await _dbService.getProductByBarcode(barcode);
   }
@@ -83,8 +97,8 @@ class ProductController extends GetxController {
       ));
       print('History entry added');
 
-      // Reload data
-      await loadData();
+      // Sync with server and reload data
+      await syncAndReload();
 
       // Show success message
       Get.snackbar('Success', 'Product added successfully');
@@ -135,8 +149,8 @@ class ProductController extends GetxController {
         ));
         print('History entry added');
 
-        // Reload data
-        await loadData();
+        // Sync with server and reload data
+        await syncAndReload();
 
         // Show success message
         Get.snackbar('Success', 'Stock added successfully');
@@ -206,8 +220,8 @@ class ProductController extends GetxController {
           ));
           print('Rental history entry added');
 
-          // Reload data
-          await loadData();
+          // Sync with server and reload data
+          await syncAndReload();
 
           // Show success message
           Get.snackbar('Success', 'Product rented successfully');
@@ -275,8 +289,8 @@ class ProductController extends GetxController {
         ));
         print('Return history entry added');
 
-        // Reload data
-        await loadData();
+        // Sync with server and reload data
+        await syncAndReload();
 
         // Show success message
         Get.snackbar('Success', 'Product returned successfully');
