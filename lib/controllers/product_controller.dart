@@ -25,9 +25,15 @@ class ProductController extends GetxController {
       products.value = await _dbService.getAllProducts();
       print('Loaded ${products.length} products');
 
+      print('Loading history data...');
       rentalHistory.value = await _dbService.getHistoryByType(HistoryType.rental);
+      print('Loaded ${rentalHistory.length} rental history entries');
+
       returnHistory.value = await _dbService.getHistoryByType(HistoryType.return_product);
+      print('Loaded ${returnHistory.length} return history entries');
+
       addedProductHistory.value = await _dbService.getHistoryByType(HistoryType.added_stock);
+      print('Loaded ${addedProductHistory.length} added product history entries');
 
       print('Data loading complete');
     } catch (e) {

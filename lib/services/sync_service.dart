@@ -290,10 +290,27 @@ class SyncService {
       switch (item.operation) {
         case SyncOperation.add:
           try {
-            final history = ProductHistory.fromMap(historyData);
-            print('Adding history entry for product: ${history.productName}, quantity: ${history.quantity}');
-            await _dbService.addHistory(history);
-            print('History entry added successfully');
+            // Check if this history entry already exists by syncId
+            String? syncId = historyData['sync_id'];
+            bool alreadyExists = false;
+
+            if (syncId != null) {
+              // This is a simplified check - in a real app, you'd query the database
+              // Here we're just checking if the history type and product match
+              final historyType = HistoryType.values[historyData['type'] as int];
+              final existingHistory = await _dbService.getHistoryByType(historyType);
+
+              alreadyExists = existingHistory.any((h) => h.syncId == syncId);
+            }
+
+            if (!alreadyExists) {
+              final history = ProductHistory.fromMap(historyData);
+              print('Adding history entry for product: ${history.productName}, quantity: ${history.quantity}, type: ${history.type}');
+              await _dbService.addHistory(history);
+              print('History entry added successfully');
+            } else {
+              print('History entry with syncId $syncId already exists, skipping');
+            }
           } catch (e) {
             print('Error processing history data: $e');
             print('Problematic data: $historyData');
@@ -360,23 +377,40 @@ class SyncService {
 
   Future<void> _sendAllLocalProductsToServer(DeviceInfo server) async {
     try {
-      print('Sending all local products to server: ${server.name} (${server.ipAddress})');
+      print('Sending all local data to server: ${server.name} (${server.ipAddress})');
 
       // Get all products from database
       final products = await _dbService.getAllProducts();
       print('Found ${products.length} local products to send to server');
 
-      if (products.isEmpty) {
-        print('No local products to send');
+      // Get all history entries
+      final addedHistory = await _dbService.getHistoryByType(HistoryType.added_stock);
+      final rentalHistory = await _dbService.getHistoryByType(HistoryType.rental);
+      final returnHistory = await _dbService.getHistoryByType(HistoryType.return_product);
+      final allHistory = [...addedHistory, ...rentalHistory, ...returnHistory];
+      print('Found ${allHistory.length} history entries to send to server');
+
+      // Create sync items list
+      final List<SyncItem> syncItems = [];
+
+      // Add products to sync items
+      for (final product in products) {
+        syncItems.add(SyncItem.fromProduct(product, SyncOperation.update));
+      }
+
+      // Add history entries to sync items
+      for (final history in allHistory) {
+        syncItems.add(SyncItem.fromHistory(history, SyncOperation.add));
+      }
+
+      if (syncItems.isEmpty) {
+        print('No data to send');
         return;
       }
 
-      // Create sync items for each product
-      final syncItems = products.map((product) {
-        return SyncItem.fromProduct(product, SyncOperation.update);
-      }).toList();
+      print('Sending ${syncItems.length} items to server (${products.length} products, ${allHistory.length} history entries)');
 
-      // Create a sync batch with all products
+      // Create a sync batch with all data
       final syncBatch = SyncBatch(
         id: const Uuid().v4(),
         deviceId: _networkService.deviceId,
@@ -388,12 +422,12 @@ class SyncService {
       final success = await _networkService.sendSyncBatch(server, syncBatch);
 
       if (success) {
-        print('Successfully sent all local products to server');
+        print('Successfully sent all local data to server');
       } else {
-        print('Failed to send local products to server');
+        print('Failed to send local data to server');
       }
     } catch (e) {
-      print('Error sending local products to server: $e');
+      print('Error sending local data to server: $e');
     }
   }
 
@@ -402,13 +436,14 @@ class SyncService {
       // Try to find the ProductController instance
       if (Get.isRegistered<ProductController>()) {
         final controller = Get.find<ProductController>();
-        print('Reloading product data in ProductController');
+        print('Reloading product and history data in ProductController');
         await controller.loadData();
+        print('Data reload complete');
       } else {
         print('No ProductController instance found to reload data');
       }
     } catch (e) {
-      print('Error reloading product data: $e');
+      print('Error reloading data: $e');
     }
   }
 
@@ -437,14 +472,21 @@ class SyncService {
 
   Future<void> _sendProductsToClient(String clientDeviceId) async {
     try {
-      print('Preparing to send all products to client: $clientDeviceId');
+      print('Preparing to send all data to client: $clientDeviceId');
 
       // Get all products from database
       final products = await _dbService.getAllProducts();
       print('Found ${products.length} products to send to client');
 
-      if (products.isEmpty) {
-        print('No products to send to client');
+      // Get all history entries
+      final addedHistory = await _dbService.getHistoryByType(HistoryType.added_stock);
+      final rentalHistory = await _dbService.getHistoryByType(HistoryType.rental);
+      final returnHistory = await _dbService.getHistoryByType(HistoryType.return_product);
+      final allHistory = [...addedHistory, ...rentalHistory, ...returnHistory];
+      print('Found ${allHistory.length} history entries to send to client');
+
+      if (products.isEmpty && allHistory.isEmpty) {
+        print('No data to send to client');
         return;
       }
 
@@ -476,19 +518,34 @@ class SyncService {
         return;
       }
 
-      // Create sync items for each product
-      final syncItems = products.map((product) {
-        return SyncItem(
+      // Create sync items list
+      final List<SyncItem> syncItems = [];
+
+      // Add products to sync items
+      for (final product in products) {
+        syncItems.add(SyncItem(
           id: const Uuid().v4(),
           entityId: product.syncId ?? product.id.toString(),
           entityType: 'product',
           operation: SyncOperation.update,
           data: product.toMap(),
           timestamp: DateTime.now(),
-        );
-      }).toList();
+        ));
+      }
 
-      // Create a sync batch with all products
+      // Add history entries to sync items
+      for (final history in allHistory) {
+        syncItems.add(SyncItem(
+          id: const Uuid().v4(),
+          entityId: history.syncId ?? history.id.toString(),
+          entityType: 'history',
+          operation: SyncOperation.add,
+          data: history.toMap(includeId: true),
+          timestamp: DateTime.now(),
+        ));
+      }
+
+      // Create a sync batch with all data
       final syncBatch = SyncBatch(
         id: const Uuid().v4(),
         deviceId: _networkService.deviceId,
@@ -497,11 +554,11 @@ class SyncService {
       );
 
       // Send the batch to the client
-      print('Sending ${syncItems.length} products to client ${clientDevice.name} at ${clientDevice.ipAddress}');
+      print('Sending ${syncItems.length} items to client ${clientDevice.name} (${products.length} products, ${allHistory.length} history entries)');
       final success = await _networkService.sendSyncBatch(clientDevice, syncBatch);
-      print('Sent all products to client $clientDeviceId: ${success ? 'success' : 'failed'}');
+      print('Sent all data to client $clientDeviceId: ${success ? 'success' : 'failed'}');
     } catch (e) {
-      print('Error sending products to client: $e');
+      print('Error sending data to client: $e');
     }
   }
 
