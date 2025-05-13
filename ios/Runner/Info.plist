@@ -45,5 +45,11 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>This app needs access to the local network to sync inventory data with other devices</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_inventory-sync._tcp</string>
+	</array>
 </dict>
 </plist>

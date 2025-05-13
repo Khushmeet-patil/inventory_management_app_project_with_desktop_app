@@ -16,6 +16,7 @@ import 'controllers/settings_controller.dart';
 import 'controllers/language_controller.dart';
 import 'services/database_services.dart';
 import 'translations/app_translations.dart';
+import 'utils/toast_util.dart';
 
 void main() async {
   // Ensure Flutter is initialized
@@ -51,6 +52,7 @@ class InventoryApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return GetMaterialApp(
       title: 'Inventory Management',
+      navigatorKey: ToastUtil.navigatorKey,
       theme: ThemeData(
         primarySwatch: Colors.teal,
         visualDensity: VisualDensity.adaptivePlatformDensity,

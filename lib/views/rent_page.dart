@@ -83,7 +83,11 @@ class _RentPageState extends State<RentPage> {
                 });
                 Get.back();
               } else {
-                ToastUtil.showError('fill_all_fields_correctly'.tr);
+                try {
+                  ToastUtil.showError('fill_all_fields_correctly'.tr);
+                } catch (e) {
+                  print('Error showing toast: $e');
+                }
               }
             },
             child: Text('add'.tr),
@@ -95,11 +99,19 @@ class _RentPageState extends State<RentPage> {
 
   void _confirmRent() async {
     if (_personController.text.isEmpty) {
-      ToastUtil.showError('enter_person_name'.tr);
+      try {
+        ToastUtil.showError('enter_person_name'.tr);
+      } catch (e) {
+        print('Error showing toast: $e');
+      }
       return;
     }
     if (_rentList.isEmpty) {
-      ToastUtil.showError('no_products_to_rent'.tr);
+      try {
+        ToastUtil.showError('no_products_to_rent'.tr);
+      } catch (e) {
+        print('Error showing toast: $e');
+      }
       return;
     }
     for (var item in _rentList) {

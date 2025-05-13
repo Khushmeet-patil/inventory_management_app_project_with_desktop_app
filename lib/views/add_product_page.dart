@@ -90,7 +90,11 @@ class _AddProductPageState extends State<AddProductPage> {
 
   void _submit() async {
     if (_barcodeController.text.isEmpty || _quantityController.text.isEmpty) {
-      ToastUtil.showError('fill_required_fields'.tr);
+      try {
+        ToastUtil.showError('fill_required_fields'.tr);
+      } catch (e) {
+        print('Error showing toast: $e');
+      }
       return;
     }
     final quantity = int.tryParse(_quantityController.text) ?? 0;
@@ -98,7 +102,11 @@ class _AddProductPageState extends State<AddProductPage> {
       await _controller.addExistingStock(_barcodeController.text, quantity);
     } else {
       if (_nameController.text.isEmpty || _priceController.text.isEmpty) {
-        ToastUtil.showError('fill_all_fields_new_product'.tr);
+        try {
+          ToastUtil.showError('fill_all_fields_new_product'.tr);
+        } catch (e) {
+          print('Error showing toast: $e');
+        }
         return;
       }
       final product = Product(

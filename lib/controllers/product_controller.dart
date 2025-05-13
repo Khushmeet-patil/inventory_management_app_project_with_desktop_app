@@ -39,7 +39,11 @@ class ProductController extends GetxController {
       print('Data loading complete');
     } catch (e) {
       print('Error loading data: $e');
-      ToastUtil.showError('Failed to load data: $e');
+      try {
+        ToastUtil.showError('Failed to load data: $e');
+      } catch (toastError) {
+        print('Error showing toast: $toastError');
+      }
     }
   }
 
@@ -102,10 +106,18 @@ class ProductController extends GetxController {
       await syncAndReload();
 
       // Show success message
-      ToastUtil.showSuccess('Product added successfully');
+      try {
+        ToastUtil.showSuccess('Product added successfully');
+      } catch (toastError) {
+        print('Error showing toast: $toastError');
+      }
     } catch (e) {
       print('Error adding new product: $e');
-      ToastUtil.showError('Failed to add product: $e');
+      try {
+        ToastUtil.showError('Failed to add product: $e');
+      } catch (toastError) {
+        print('Error showing toast: $toastError');
+      }
     }
   }
 
@@ -154,14 +166,26 @@ class ProductController extends GetxController {
         await syncAndReload();
 
         // Show success message
-        ToastUtil.showSuccess('Stock added successfully');
+        try {
+          ToastUtil.showSuccess('Stock added successfully');
+        } catch (toastError) {
+          print('Error showing toast: $toastError');
+        }
       } else {
         print('Product not found with barcode: $barcode');
-        ToastUtil.showError('Product not found');
+        try {
+          ToastUtil.showError('Product not found');
+        } catch (toastError) {
+          print('Error showing toast: $toastError');
+        }
       }
     } catch (e) {
       print('Error adding existing stock: $e');
-      ToastUtil.showError('Failed to add stock: $e');
+      try {
+        ToastUtil.showError('Failed to add stock: $e');
+      } catch (toastError) {
+        print('Error showing toast: $toastError');
+      }
     }
   }
 
@@ -225,18 +249,34 @@ class ProductController extends GetxController {
           await syncAndReload();
 
           // Show success message
-          ToastUtil.showSuccess('Product rented successfully');
+          try {
+            ToastUtil.showSuccess('Product rented successfully');
+          } catch (toastError) {
+            print('Error showing toast: $toastError');
+          }
         } else {
           print('Insufficient stock: requested $quantity, available ${product.quantity}');
-          ToastUtil.showError('Insufficient stock');
+          try {
+            ToastUtil.showError('Insufficient stock');
+          } catch (toastError) {
+            print('Error showing toast: $toastError');
+          }
         }
       } else {
         print('Product not found with barcode: $barcode');
-        ToastUtil.showError('Product not found');
+        try {
+          ToastUtil.showError('Product not found');
+        } catch (toastError) {
+          print('Error showing toast: $toastError');
+        }
       }
     } catch (e) {
       print('Error renting product: $e');
-      ToastUtil.showError('Failed to rent product: $e');
+      try {
+        ToastUtil.showError('Failed to rent product: $e');
+      } catch (toastError) {
+        print('Error showing toast: $toastError');
+      }
     }
   }
 
@@ -294,14 +334,26 @@ class ProductController extends GetxController {
         await syncAndReload();
 
         // Show success message
-        ToastUtil.showSuccess('Product returned successfully');
+        try {
+          ToastUtil.showSuccess('Product returned successfully');
+        } catch (toastError) {
+          print('Error showing toast: $toastError');
+        }
       } else {
         print('Product not found with barcode: $barcode');
-        ToastUtil.showError('Product not found');
+        try {
+          ToastUtil.showError('Product not found');
+        } catch (toastError) {
+          print('Error showing toast: $toastError');
+        }
       }
     } catch (e) {
       print('Error returning product: $e');
-      ToastUtil.showError('Failed to return product: $e');
+      try {
+        ToastUtil.showError('Failed to return product: $e');
+      } catch (toastError) {
+        print('Error showing toast: $toastError');
+      }
     }
   }
 }

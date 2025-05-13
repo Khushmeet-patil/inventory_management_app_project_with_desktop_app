@@ -82,7 +82,11 @@ class _ReturnPageState extends State<ReturnPage> {
                 });
                 Get.back();
               } else {
-                ToastUtil.showError('fill_barcode_quantity'.tr);
+                try {
+                  ToastUtil.showError('fill_barcode_quantity'.tr);
+                } catch (e) {
+                  print('Error showing toast: $e');
+                }
               }
             },
             child: Text('add'.tr),
@@ -94,11 +98,19 @@ class _ReturnPageState extends State<ReturnPage> {
 
   void _confirmReturn() async {
     if (_personController.text.isEmpty) {
-      ToastUtil.showError('enter_person_name'.tr);
+      try {
+        ToastUtil.showError('enter_person_name'.tr);
+      } catch (e) {
+        print('Error showing toast: $e');
+      }
       return;
     }
     if (_returnList.isEmpty) {
-      ToastUtil.showError('no_products_to_return'.tr);
+      try {
+        ToastUtil.showError('no_products_to_return'.tr);
+      } catch (e) {
+        print('Error showing toast: $e');
+      }
       return;
     }
     for (var item in _returnList) {
