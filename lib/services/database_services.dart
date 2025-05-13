@@ -71,7 +71,7 @@ class DatabaseService {
 
       return await openDatabase(
         path,
-        version: 2,
+        version: 3,
         onCreate: _createDB,
         onUpgrade: _upgradeDB,
       );
@@ -112,6 +112,7 @@ class DatabaseService {
       created_at TEXT NOT NULL,
       sync_id TEXT,
       last_synced TEXT,
+      transaction_id TEXT,
       FOREIGN KEY (product_id) REFERENCES products (id)
     )
     ''');
@@ -296,6 +297,12 @@ class DatabaseService {
         last_seen TEXT NOT NULL
       )
       ''');
+    }
+
+    if (oldVersion < 3) {
+      // Add transaction_id column to product_history table
+      print('Upgrading database to version 3: Adding transaction_id column');
+      await db.execute('ALTER TABLE product_history ADD COLUMN transaction_id TEXT');
     }
   }
 

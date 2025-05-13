@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:uuid/uuid.dart';
 import '../controllers/product_controller.dart';
 import '../utils/toast_util.dart';
 
@@ -114,6 +115,11 @@ class _RentPageState extends State<RentPage> {
       }
       return;
     }
+
+    // Generate a single transaction ID for all products in this rental
+    final String transactionId = const Uuid().v4();
+    print('Generated transaction ID for rental: $transactionId');
+
     for (var item in _rentList) {
       await _controller.rentProduct(
         item['barcode'],
@@ -121,6 +127,7 @@ class _RentPageState extends State<RentPage> {
         _personController.text,
         item['rentalDays'],
         agency: _agencyController.text.isNotEmpty ? _agencyController.text : null,
+        transactionId: transactionId,
       );
     }
     Get.back();

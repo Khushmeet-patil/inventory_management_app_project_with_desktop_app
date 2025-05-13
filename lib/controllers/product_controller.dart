@@ -189,7 +189,7 @@ class ProductController extends GetxController {
     }
   }
 
-  Future<void> rentProduct(String barcode, int quantity, String givenTo, int rentalDays, {String? agency}) async {
+  Future<void> rentProduct(String barcode, int quantity, String givenTo, int rentalDays, {String? agency, String? transactionId}) async {
     try {
       print('Renting product with barcode: $barcode, quantity: $quantity, to: $givenTo');
 
@@ -242,6 +242,7 @@ class ProductController extends GetxController {
             rentedDate: DateTime.now(),
             rentalDays: rentalDays,
             createdAt: DateTime.now(),
+            transactionId: transactionId,
           ));
           print('Rental history entry added');
 
@@ -280,7 +281,7 @@ class ProductController extends GetxController {
     }
   }
 
-  Future<void> returnProduct(String barcode, int quantity, String returnedBy, {String? agency, String? notes}) async {
+  Future<void> returnProduct(String barcode, int quantity, String returnedBy, {String? agency, String? notes, String? transactionId}) async {
     try {
       print('Returning product with barcode: $barcode, quantity: $quantity, by: $returnedBy');
 
@@ -327,6 +328,7 @@ class ProductController extends GetxController {
           notes: notes,
           createdAt: DateTime.now(),
           rentedDate: DateTime.now(), // This is required but not really used for returns
+          transactionId: transactionId,
         ));
         print('Return history entry added');
 

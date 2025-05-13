@@ -16,6 +16,7 @@ class ProductHistory {
   final DateTime createdAt;
   String? syncId; // Unique ID for synchronization
   DateTime? lastSynced; // Last time this history was synced
+  final String? transactionId; // ID to group items rented in the same transaction
 
   ProductHistory({
     required this.id,
@@ -33,6 +34,7 @@ class ProductHistory {
     required this.createdAt,
     this.syncId,
     this.lastSynced,
+    this.transactionId,
   });
 
   factory ProductHistory.fromMap(Map<String, dynamic> map) {
@@ -52,6 +54,7 @@ class ProductHistory {
       createdAt: DateTime.parse(map['created_at'] as String),
       syncId: map['sync_id'] as String?,
       lastSynced: map['last_synced'] != null ? DateTime.parse(map['last_synced'] as String) : null,
+      transactionId: map['transaction_id'] as String?,
     );
   }
 
@@ -71,6 +74,7 @@ class ProductHistory {
       'created_at': createdAt.toIso8601String(),
       'sync_id': syncId,
       'last_synced': lastSynced?.toIso8601String(),
+      'transaction_id': transactionId,
     };
     if (includeId) {
       map['id'] = id;
@@ -94,6 +98,7 @@ class ProductHistory {
     DateTime? createdAt,
     String? syncId,
     DateTime? lastSynced,
+    String? transactionId,
   }) {
     return ProductHistory(
       id: id ?? this.id,
@@ -111,6 +116,7 @@ class ProductHistory {
       createdAt: createdAt ?? this.createdAt,
       syncId: syncId ?? this.syncId,
       lastSynced: lastSynced ?? this.lastSynced,
+      transactionId: transactionId ?? this.transactionId,
     );
   }
 }

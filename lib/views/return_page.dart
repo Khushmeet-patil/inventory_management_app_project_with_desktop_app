@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:uuid/uuid.dart';
 import '../controllers/product_controller.dart';
 import '../utils/toast_util.dart';
 
@@ -113,6 +114,11 @@ class _ReturnPageState extends State<ReturnPage> {
       }
       return;
     }
+
+    // Generate a single transaction ID for all products in this return
+    final String transactionId = const Uuid().v4();
+    print('Generated transaction ID for return: $transactionId');
+
     for (var item in _returnList) {
       await _controller.returnProduct(
         item['barcode'],
@@ -120,6 +126,7 @@ class _ReturnPageState extends State<ReturnPage> {
         _personController.text,
         agency: _agencyController.text.isNotEmpty ? _agencyController.text : null,
         notes: item['notes'].isNotEmpty ? item['notes'] : null,
+        transactionId: transactionId,
       );
     }
     Get.back();
