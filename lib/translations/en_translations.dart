@@ -130,4 +130,10 @@ final Map<String, String> enTranslations = {
   'edit_product': 'Edit Product',
   'save_changes': 'Save Changes',
   'update_failed': 'Update Failed',
+
+  // Search
+  'search': 'Search',
+  'search_products': 'Search products...',
+  'cancel_search': 'Cancel Search',
+  'no_products_found': 'No products found',
 };

@@ -119,4 +119,10 @@ final Map<String, String> guTranslations = {
   'edit_product': 'ઉત્પાદન સંપાદિત કરો',
   'save_changes': 'ફેરફારો સાચવો',
   'update_failed': 'અપડેટ નિષ્ફળ',
+
+  // Search
+  'search': 'શોધો',
+  'search_products': 'ઉત્પાદનો શોધો...',
+  'cancel_search': 'શોધ રદ કરો',
+  'no_products_found': 'કોઈ ઉત્પાદનો મળ્યા નથી',
 };

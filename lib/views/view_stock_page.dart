@@ -6,8 +6,51 @@ import '../services/sync_service.dart';
 import '../utils/image_picker_util.dart';
 import '../models/product_model.dart';
 
-class ViewStockPage extends StatelessWidget {
+class ViewStockPage extends StatefulWidget {
+  @override
+  _ViewStockPageState createState() => _ViewStockPageState();
+}
+
+class _ViewStockPageState extends State<ViewStockPage> {
   final ProductController _controller = Get.find();
+  final TextEditingController _searchController = TextEditingController();
+  final RxList<Product> _filteredProducts = <Product>[].obs;
+  final RxBool _isSearching = false.obs;
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize filtered products with all products
+    _filteredProducts.value = _controller.products;
+
+    // Listen to changes in the product list
+    ever(_controller.products, (_) {
+      _filterProducts(_searchController.text);
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _filterProducts(String query) {
+    if (query.isEmpty) {
+      _filteredProducts.value = _controller.products;
+    } else {
+      final lowercaseQuery = query.toLowerCase();
+      _filteredProducts.value = _controller.products.where((product) {
+        return product.name.toLowerCase().contains(lowercaseQuery) ||
+               product.barcode.toLowerCase().contains(lowercaseQuery) ||
+               (product.color != null && product.color!.toLowerCase().contains(lowercaseQuery)) ||
+               (product.material != null && product.material!.toLowerCase().contains(lowercaseQuery)) ||
+               (product.size != null && product.size!.toLowerCase().contains(lowercaseQuery)) ||
+               (product.unitType != null && product.unitType!.toLowerCase().contains(lowercaseQuery));
+      }).toList();
+    }
+  }
+
 
   Future<void> _refreshData() async {
     try {
@@ -118,8 +161,31 @@ class ViewStockPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('view_stock'.tr),
+        title: Obx(() => _isSearching.value
+          ? TextField(
+              controller: _searchController,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'search_products'.tr,
+                border: InputBorder.none,
+              ),
+              onChanged: _filterProducts,
+            )
+          : Text('view_stock'.tr)
+        ),
         actions: [
+          // Search button
+          Obx(() => IconButton(
+            icon: Icon(_isSearching.value ? Icons.close : Icons.search),
+            onPressed: () {
+              _isSearching.value = !_isSearching.value;
+              if (!_isSearching.value) {
+                _searchController.clear();
+                _filterProducts('');
+              }
+            },
+            tooltip: _isSearching.value ? 'cancel_search'.tr : 'search'.tr,
+          )),
           // Add a manual refresh button in the app bar
           IconButton(
             icon: Icon(Icons.refresh),
@@ -130,69 +196,83 @@ class ViewStockPage extends StatelessWidget {
       ),
       body: Obx(() => RefreshIndicator(
         onRefresh: _refreshData,
-        child: ListView.builder(
-          physics: const AlwaysScrollableScrollPhysics(),
-          itemCount: _controller.products.length,
-          itemBuilder: (context, index) {
-            final product = _controller.products[index];
-            return Card(
-              child: InkWell(
-                onTap: () => _showProductDetails(context, product),
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Row(
-                    children: [
-                      // Product image
-                      Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.shade300),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: product.photo != null && product.photo!.isNotEmpty
-                            ? ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.file(
-                                  File(product.photo!),
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Center(child: Icon(Icons.inventory, color: Colors.teal));
-                                  },
-                                ),
-                              )
-                            : Center(child: Icon(Icons.inventory, color: Colors.teal)),
-                      ),
-                      SizedBox(width: 16),
-                      // Product details
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              product.name,
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                            ),
-                            SizedBox(height: 4),
-                            Text('Barcode: ${product.barcode}'),
-                            if (product.unitType != null) Text('Unit Type: ${product.unitType}'),
-                            if (product.rentPrice != null) Text('Rent: ₹${product.rentPrice!.toStringAsFixed(2)}'),
-                          ],
-                        ),
-                      ),
-                      // Edit button
-                      IconButton(
-                        icon: Icon(Icons.edit, color: Colors.teal),
-                        onPressed: () => _editProduct(context, product),
-                        tooltip: 'edit_product'.tr,
-                      ),
-                    ],
+        child: _filteredProducts.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.search_off, size: 64, color: Colors.grey),
+                  SizedBox(height: 16),
+                  Text(
+                    'no_products_found'.tr,
+                    style: TextStyle(fontSize: 18, color: Colors.grey),
                   ),
-                ),
+                ],
               ),
-            );
-          },
-        ),
+            )
+          : ListView.builder(
+              physics: const AlwaysScrollableScrollPhysics(),
+              itemCount: _filteredProducts.length,
+              itemBuilder: (context, index) {
+                final product = _filteredProducts[index];
+                return Card(
+                  child: InkWell(
+                    onTap: () => _showProductDetails(context, product),
+                    child: Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Row(
+                        children: [
+                          // Product image
+                          Container(
+                            width: 80,
+                            height: 80,
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey.shade300),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: product.photo != null && product.photo!.isNotEmpty
+                                ? ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.file(
+                                      File(product.photo!),
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return Center(child: Icon(Icons.inventory, color: Colors.teal));
+                                      },
+                                    ),
+                                  )
+                                : Center(child: Icon(Icons.inventory, color: Colors.teal)),
+                          ),
+                          SizedBox(width: 16),
+                          // Product details
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  product.name,
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                ),
+                                SizedBox(height: 4),
+                                Text('Barcode: ${product.barcode}'),
+                                if (product.unitType != null) Text('Unit Type: ${product.unitType}'),
+                                if (product.rentPrice != null) Text('Rent: ₹${product.rentPrice!.toStringAsFixed(2)}'),
+                              ],
+                            ),
+                          ),
+                          // Edit button
+                          IconButton(
+                            icon: Icon(Icons.edit, color: Colors.teal),
+                            onPressed: () => _editProduct(context, product),
+                            tooltip: 'edit_product'.tr,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
       )),
     );
   }

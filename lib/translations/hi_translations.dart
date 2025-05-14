@@ -119,4 +119,10 @@ final Map<String, String> hiTranslations = {
   'edit_product': 'उत्पाद संपादित करें',
   'save_changes': 'परिवर्तन सहेजें',
   'update_failed': 'अपडेट विफल रहा',
+
+  // Search
+  'search': 'खोजें',
+  'search_products': 'उत्पाद खोजें...',
+  'cancel_search': 'खोज रद्द करें',
+  'no_products_found': 'कोई उत्पाद नहीं मिला',
 };

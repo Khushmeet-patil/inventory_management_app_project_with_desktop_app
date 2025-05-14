@@ -119,4 +119,10 @@ final Map<String, String> esTranslations = {
   'edit_product': 'Editar Producto',
   'save_changes': 'Guardar Cambios',
   'update_failed': 'Actualización Fallida',
+
+  // Search
+  'search': 'Buscar',
+  'search_products': 'Buscar productos...',
+  'cancel_search': 'Cancelar Búsqueda',
+  'no_products_found': 'No se encontraron productos',
 };
