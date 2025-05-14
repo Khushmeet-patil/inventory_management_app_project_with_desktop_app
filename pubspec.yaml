@@ -48,6 +48,8 @@ dependencies:
   connectivity_plus: ^5.0.2
   fluttertoast: ^8.2.12
   shared_preferences:
+  image_picker: ^1.1.2
+  path_provider: ^2.1.5
   # The following adds the Firebase Core and Analytics libraries
 
 dev_dependencies:
@@ -72,9 +74,8 @@ flutter:
   uses-material-design: true
 
   # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+  assets:
+    - assets/images/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

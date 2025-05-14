@@ -71,7 +71,7 @@ class DatabaseService {
 
       return await openDatabase(
         path,
-        version: 3,
+        version: 4, // Increased version for new schema
         onCreate: _createDB,
         onUpgrade: _upgradeDB,
       );
@@ -89,6 +89,14 @@ class DatabaseService {
       name TEXT NOT NULL,
       quantity INTEGER NOT NULL,
       price_per_quantity REAL NOT NULL,
+      photo TEXT,
+      unit_type TEXT,
+      number_of_units INTEGER,
+      size TEXT,
+      color TEXT,
+      material TEXT,
+      weight TEXT,
+      rent_price REAL,
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL,
       syncId TEXT,
@@ -188,8 +196,15 @@ class DatabaseService {
         // Update the existing product instead of adding a new one
         final updatedProduct = existing.copyWith(
           name: product.name,
-          quantity: existing.quantity + product.quantity,
+          quantity: (existing.quantity ?? 0) + (product.quantity ?? 0),
           pricePerQuantity: product.pricePerQuantity,
+          photo: product.photo ?? existing.photo,
+          unitType: product.unitType ?? existing.unitType,
+          size: product.size ?? existing.size,
+          color: product.color ?? existing.color,
+          material: product.material ?? existing.material,
+          weight: product.weight ?? existing.weight,
+          rentPrice: product.rentPrice ?? existing.rentPrice,
           updatedAt: DateTime.now(),
           syncId: product.syncId ?? existing.syncId,
           lastSynced: DateTime.now(),
@@ -303,6 +318,19 @@ class DatabaseService {
       // Add transaction_id column to product_history table
       print('Upgrading database to version 3: Adding transaction_id column');
       await db.execute('ALTER TABLE product_history ADD COLUMN transaction_id TEXT');
+    }
+
+    if (oldVersion < 4) {
+      // Add new product fields
+      print('Upgrading database to version 4: Adding new product fields');
+      await db.execute('ALTER TABLE products ADD COLUMN photo TEXT');
+      await db.execute('ALTER TABLE products ADD COLUMN unit_type TEXT');
+      await db.execute('ALTER TABLE products ADD COLUMN number_of_units INTEGER');
+      await db.execute('ALTER TABLE products ADD COLUMN size TEXT');
+      await db.execute('ALTER TABLE products ADD COLUMN color TEXT');
+      await db.execute('ALTER TABLE products ADD COLUMN material TEXT');
+      await db.execute('ALTER TABLE products ADD COLUMN weight TEXT');
+      await db.execute('ALTER TABLE products ADD COLUMN rent_price REAL');
     }
   }
 

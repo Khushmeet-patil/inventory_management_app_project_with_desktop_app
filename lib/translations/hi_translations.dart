@@ -114,4 +114,9 @@ final Map<String, String> hiTranslations = {
   // Common
   'server': 'सर्वर',
   'client': 'क्लाइंट',
+
+  // Edit Product
+  'edit_product': 'उत्पाद संपादित करें',
+  'save_changes': 'परिवर्तन सहेजें',
+  'update_failed': 'अपडेट विफल रहा',
 };

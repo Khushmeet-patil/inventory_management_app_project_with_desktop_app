@@ -80,10 +80,7 @@ class ProductController extends GetxController {
         return;
       }
 
-      if (product.quantity <= 0) {
-        ToastUtil.showError('Quantity must be greater than zero');
-        return;
-      }
+      // Quantity check removed as it's now optional
 
       // Add the product
       final addedProduct = await _dbService.addProductWithSync(product);
@@ -95,7 +92,7 @@ class ProductController extends GetxController {
         productId: addedProduct.id,
         productName: product.name,
         barcode: product.barcode,
-        quantity: product.quantity,
+        quantity: product.quantity ?? 0,
         type: HistoryType.added_stock,
         rentedDate: DateTime.now(),
         createdAt: DateTime.now(),
@@ -139,15 +136,15 @@ class ProductController extends GetxController {
       // Find the product
       final product = await getProductByBarcode(barcode);
       if (product != null) {
-        print('Found existing product: ${product.name}, current quantity: ${product.quantity}');
+        print('Found existing product: ${product.name}, current quantity: ${product.quantity ?? 0}');
 
         // Update the product
         final updatedProduct = product.copyWith(
-          quantity: product.quantity + quantity,
+          quantity: (product.quantity ?? 0) + quantity,
           updatedAt: DateTime.now(),
         );
         await _dbService.updateProductWithSync(updatedProduct);
-        print('Product updated, new quantity: ${updatedProduct.quantity}');
+        print('Product updated, new quantity: ${updatedProduct.quantity ?? 0}');
 
         // Add history entry
         await _dbService.addHistoryWithSync(ProductHistory(
@@ -217,17 +214,17 @@ class ProductController extends GetxController {
       // Find the product
       final product = await getProductByBarcode(barcode);
       if (product != null) {
-        print('Found product: ${product.name}, current quantity: ${product.quantity}');
+        print('Found product: ${product.name}, current quantity: ${product.quantity ?? 0}');
 
         // Check if we have enough stock
-        if (product.quantity >= quantity) {
+        if ((product.quantity ?? 0) >= quantity) {
           // Update the product
           final updatedProduct = product.copyWith(
-            quantity: product.quantity - quantity,
+            quantity: (product.quantity ?? 0) - quantity,
             updatedAt: DateTime.now(),
           );
           await _dbService.updateProductWithSync(updatedProduct);
-          print('Product updated, new quantity: ${updatedProduct.quantity}');
+          print('Product updated, new quantity: ${updatedProduct.quantity ?? 0}');
 
           // Add history entry
           await _dbService.addHistoryWithSync(ProductHistory(
@@ -256,7 +253,7 @@ class ProductController extends GetxController {
             print('Error showing toast: $toastError');
           }
         } else {
-          print('Insufficient stock: requested $quantity, available ${product.quantity}');
+          print('Insufficient stock: requested $quantity, available ${product.quantity ?? 0}');
           try {
             ToastUtil.showError('Insufficient stock');
           } catch (toastError) {
@@ -304,15 +301,15 @@ class ProductController extends GetxController {
       // Find the product
       final product = await getProductByBarcode(barcode);
       if (product != null) {
-        print('Found product: ${product.name}, current quantity: ${product.quantity}');
+        print('Found product: ${product.name}, current quantity: ${product.quantity ?? 0}');
 
         // Update the product
         final updatedProduct = product.copyWith(
-          quantity: product.quantity + quantity,
+          quantity: (product.quantity ?? 0) + quantity,
           updatedAt: DateTime.now(),
         );
         await _dbService.updateProductWithSync(updatedProduct);
-        print('Product updated, new quantity: ${updatedProduct.quantity}');
+        print('Product updated, new quantity: ${updatedProduct.quantity ?? 0}');
 
         // Add history entry
         await _dbService.addHistoryWithSync(ProductHistory(
@@ -353,6 +350,39 @@ class ProductController extends GetxController {
       print('Error returning product: $e');
       try {
         ToastUtil.showError('Failed to return product: $e');
+      } catch (toastError) {
+        print('Error showing toast: $toastError');
+      }
+    }
+  }
+
+  Future<void> updateProduct(Product product) async {
+    try {
+      print('Updating product: ID=${product.id}, Name=${product.name}');
+
+      // Validate product data
+      if (product.name.isEmpty) {
+        ToastUtil.showError('Product name cannot be empty');
+        return;
+      }
+
+      // Update the product
+      await _dbService.updateProductWithSync(product);
+      print('Product updated successfully');
+
+      // Sync with server and reload data
+      await syncAndReload();
+
+      // Show success message
+      try {
+        ToastUtil.showSuccess('Product updated successfully');
+      } catch (toastError) {
+        print('Error showing toast: $toastError');
+      }
+    } catch (e) {
+      print('Error updating product: $e');
+      try {
+        ToastUtil.showError('Failed to update product: $e');
       } catch (toastError) {
         print('Error showing toast: $toastError');
       }

@@ -35,6 +35,17 @@ final Map<String, String> enTranslations = {
   'error': 'Error',
   'fill_required_fields': 'Please fill all required fields',
   'fill_all_fields_new_product': 'Please fill all fields for new product',
+  'tap_to_add_photo': 'Tap to add photo',
+  'unit_type': 'Unit Type',
+  'number_of_units': 'Number of Units',
+  'size': 'Size',
+  'width': 'Width',
+  'height': 'Height',
+  'unit': 'Unit',
+  'color': 'Color',
+  'material': 'Material',
+  'weight': 'Weight',
+  'rent_price': 'Rent Price',
 
   // Rent page
   'rent_products': 'Rent Products',
@@ -114,4 +125,9 @@ final Map<String, String> enTranslations = {
   // Common
   'server': 'Server',
   'client': 'Client',
+
+  // Edit Product
+  'edit_product': 'Edit Product',
+  'save_changes': 'Save Changes',
+  'update_failed': 'Update Failed',
 };

@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'views/home_page.dart';
 import 'views/add_product_page.dart';
+import 'views/edit_product_page.dart';
 import 'views/rent_page.dart';
 import 'views/return_page.dart';
 import 'views/view_stock_page.dart';
@@ -78,6 +79,10 @@ class InventoryApp extends StatelessWidget {
         GetPage(name: '/return-history', page: () => ReturnHistoryPage()),
         GetPage(name: '/added-history', page: () => AddedProductHistoryPage()),
         GetPage(name: '/settings', page: () => SettingsPage()),
+        GetPage(
+          name: '/edit-product',
+          page: () => EditProductPage(product: Get.arguments),
+        ),
       ],
       initialRoute: '/',
     );

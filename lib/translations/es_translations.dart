@@ -114,4 +114,9 @@ final Map<String, String> esTranslations = {
   // Common
   'server': 'Servidor',
   'client': 'Cliente',
+
+  // Edit Product
+  'edit_product': 'Editar Producto',
+  'save_changes': 'Guardar Cambios',
+  'update_failed': 'Actualización Fallida',
 };

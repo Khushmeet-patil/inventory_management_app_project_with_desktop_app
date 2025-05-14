@@ -291,11 +291,11 @@ class SyncService {
         case SyncOperation.update:
           try {
             final product = Product.fromMap(productData);
-            print('Parsed product: ${product.name}, quantity: ${product.quantity}, barcode: ${product.barcode}');
+            print('Parsed product: ${product.name}, quantity: ${product.quantity ?? 0}, barcode: ${product.barcode}');
 
             // Check if product exists by barcode
             final existingProduct = await _dbService.getProductByBarcode(product.barcode);
-            print('Existing product: ${existingProduct?.name}, quantity: ${existingProduct?.quantity}');
+            print('Existing product: ${existingProduct?.name}, quantity: ${existingProduct?.quantity ?? 0}');
 
             if (existingProduct == null) {
               // Add new product
@@ -307,11 +307,18 @@ class SyncService {
                 name: product.name,
                 quantity: product.quantity,
                 pricePerQuantity: product.pricePerQuantity,
+                photo: product.photo,
+                unitType: product.unitType,
+                size: product.size,
+                color: product.color,
+                material: product.material,
+                weight: product.weight,
+                rentPrice: product.rentPrice,
                 updatedAt: product.updatedAt,
                 syncId: product.syncId,
                 lastSynced: DateTime.now(),
               );
-              print('Updating product: ${updatedProduct.name}, new quantity: ${updatedProduct.quantity}');
+              print('Updating product: ${updatedProduct.name}, new quantity: ${updatedProduct.quantity ?? 0}');
               await _dbService.updateProduct(updatedProduct);
             }
           } catch (e) {

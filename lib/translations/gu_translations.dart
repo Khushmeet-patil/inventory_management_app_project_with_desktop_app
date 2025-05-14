@@ -114,4 +114,9 @@ final Map<String, String> guTranslations = {
   // Common
   'server': 'સર્વર',
   'client': 'ક્લાયન્ટ',
+
+  // Edit Product
+  'edit_product': 'ઉત્પાદન સંપાદિત કરો',
+  'save_changes': 'ફેરફારો સાચવો',
+  'update_failed': 'અપડેટ નિષ્ફળ',
 };
