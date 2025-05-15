@@ -108,6 +108,7 @@ final Map<String, String> enTranslations = {
   'status': 'Status',
   'pending_items': 'Pending Items',
   'sync_now': 'Sync Now',
+  'auto_sync': 'Auto Sync',
 
   // Devices section
   'discovered_devices': 'Discovered Devices',

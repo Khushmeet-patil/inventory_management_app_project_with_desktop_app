@@ -24,6 +24,9 @@ class SyncService {
   Timer? _syncTimer;
   final int syncIntervalSeconds = 5; // Reduced to 5 seconds for more frequent syncing
 
+  // Auto-sync settings
+  final RxBool autoSyncEnabled = true.obs; // Enable auto-sync by default
+
   SyncService._init();
 
   Future<void> initialize({
@@ -52,8 +55,13 @@ class SyncService {
     _syncTimer?.cancel();
     _syncTimer = Timer.periodic(
       Duration(seconds: syncIntervalSeconds),
-      (_) => syncWithServer(),
+      (_) => {
+        if (autoSyncEnabled.value && _networkService.isConnectedToServer.value) {
+          syncWithServer()
+        }
+      },
     );
+    print('Sync timer started, will run every $syncIntervalSeconds seconds if auto-sync is enabled');
   }
 
   Future<void> _updatePendingSyncCount() async {

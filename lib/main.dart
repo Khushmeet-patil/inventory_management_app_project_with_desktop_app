@@ -18,6 +18,7 @@ import 'controllers/language_controller.dart';
 import 'services/database_services.dart';
 import 'translations/app_translations.dart';
 import 'utils/toast_util.dart';
+import 'utils/windows_security_util.dart';
 
 void main() async {
   // Ensure Flutter is initialized
@@ -103,6 +104,35 @@ class _MainPageState extends State<MainPage> {
     ReturnPage(),
     SettingsPage(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    // Auto-initialize network service after a short delay to allow UI to load
+    Future.delayed(Duration(milliseconds: 500), () {
+      _initializeNetworkService();
+    });
+  }
+
+  Future<void> _initializeNetworkService() async {
+    try {
+      // Show security messages on Windows
+      if (Platform.isWindows) {
+        // Show security messages with a delay between them
+        WindowsSecurityUtil.showSecurityMessage();
+        await Future.delayed(Duration(seconds: 2));
+        WindowsSecurityUtil.showFirewallMessage();
+        await Future.delayed(Duration(seconds: 2));
+        WindowsSecurityUtil.showAntivirusMessage();
+      }
+
+      final settingsController = Get.find<SettingsController>();
+      await settingsController.autoInitialize();
+      print('Network service auto-initialized successfully');
+    } catch (e) {
+      print('Error auto-initializing network service: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

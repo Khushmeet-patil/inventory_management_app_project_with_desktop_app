@@ -97,6 +97,7 @@ final Map<String, String> esTranslations = {
   'status': 'Estado',
   'pending_items': 'Elementos Pendientes',
   'sync_now': 'Sincronizar Ahora',
+  'auto_sync': 'Sincronización Automática',
 
   // Devices section
   'discovered_devices': 'Dispositivos Descubiertos',

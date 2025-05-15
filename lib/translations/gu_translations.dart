@@ -97,6 +97,7 @@ final Map<String, String> guTranslations = {
   'status': 'સ્થિતિ',
   'pending_items': 'બાકી આઇટમ્સ',
   'sync_now': 'હવે સિંક કરો',
+  'auto_sync': 'ઑટો સિંક',
 
   // Devices section
   'discovered_devices': 'શોધાયેલા ડિવાઇસ',

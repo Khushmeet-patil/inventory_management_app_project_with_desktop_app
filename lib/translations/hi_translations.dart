@@ -97,6 +97,7 @@ final Map<String, String> hiTranslations = {
   'status': 'स्थिति',
   'pending_items': 'लंबित आइटम',
   'sync_now': 'अभी सिंक करें',
+  'auto_sync': 'स्वचालित सिंक',
 
   // Devices section
   'discovered_devices': 'खोजे गए डिवाइस',

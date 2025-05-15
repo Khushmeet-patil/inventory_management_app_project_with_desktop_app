@@ -1,13 +1,19 @@
+import 'dart:io' show Platform;
 import 'package:get/get.dart';
 import '../models/sync_model.dart';
 import '../services/network_service.dart';
 import '../services/sync_service.dart';
 import '../services/database_services.dart';
+import '../utils/toast_util.dart';
 
 class SettingsController extends GetxController {
   final NetworkService _networkService = NetworkService.instance;
   final SyncService _syncService = SyncService.instance;
   final DatabaseService _dbService = DatabaseService.instance;
+
+  // Public getters for services
+  NetworkService get networkService => _networkService;
+  SyncService get syncService => _syncService;
 
   final RxBool isServer = false.obs;
   final RxString deviceName = ''.obs;
@@ -18,10 +24,54 @@ class SettingsController extends GetxController {
   final RxBool isDiscovering = false.obs;
   final RxBool isInitialized = false.obs;
 
+  // Flag to track if auto-initialization has been performed
+  final RxBool autoInitialized = false.obs;
+
   @override
   void onInit() {
     super.onInit();
     deviceName.value = _networkService.deviceName;
+
+    // Auto-detect platform and set role
+    _detectPlatformAndSetRole();
+  }
+
+  // Automatically detect platform and set the appropriate role
+  void _detectPlatformAndSetRole() {
+    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      // Desktop platforms should be servers by default
+      isServer.value = true;
+      print('Desktop platform detected: Setting as SERVER');
+    } else {
+      // Mobile platforms should be clients by default
+      isServer.value = false;
+      print('Mobile platform detected: Setting as CLIENT');
+    }
+  }
+
+  // Auto-initialize the network service based on platform
+  Future<void> autoInitialize() async {
+    if (autoInitialized.value) return;
+
+    print('Auto-initializing network service...');
+    await initialize();
+
+    // If we're a client, automatically discover servers
+    if (!isServer.value) {
+      print('Auto-discovering servers...');
+      await discoverDevices();
+
+      // If we found servers, try to sync
+      if (discoveredDevices.any((device) => device.role == DeviceRole.server)) {
+        print('Servers found, initiating sync...');
+        await syncNow();
+        ToastUtil.showInfo('Connected to server');
+      }
+    } else {
+      ToastUtil.showInfo('Server initialized');
+    }
+
+    autoInitialized.value = true;
   }
 
   Future<void> initialize() async {

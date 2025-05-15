@@ -32,6 +32,15 @@ class NetworkService {
   // Known devices
   final RxList<DeviceInfo> knownDevices = <DeviceInfo>[].obs;
 
+  // Connection status
+  final RxBool isConnectedToServer = false.obs;
+  final RxString connectedServerName = ''.obs;
+  final RxString connectedServerIp = ''.obs;
+
+  // Auto-discovery settings
+  final int autoDiscoveryIntervalSeconds = 30; // How often to auto-discover servers
+  Timer? _autoDiscoveryTimer;
+
   // Callbacks
   Function(SyncBatch)? onSyncBatchReceived;
 
@@ -48,6 +57,9 @@ class NetworkService {
       deviceName = customDeviceName;
     }
     onSyncBatchReceived = syncBatchCallback;
+
+    // Cancel any existing auto-discovery timer
+    _autoDiscoveryTimer?.cancel();
 
     // Set manual IP if provided
     if (customIpAddress != null && customIpAddress.isNotEmpty) {
@@ -80,6 +92,9 @@ class NetworkService {
 
     if (deviceRole == DeviceRole.server) {
       await startServer();
+    } else {
+      // For clients, start auto-discovery timer
+      _startAutoDiscovery();
     }
   }
 
@@ -113,13 +128,15 @@ class NetworkService {
     try {
       final app = Router();
 
-      // Define API routes
-      app.post('/sync', _handleSyncRequest);
-      app.get('/ping', _handlePingRequest);
-      app.get('/devices', _handleGetDevicesRequest);
+      // Define API routes with security checks
+      app.post('/sync', _secureHandler(_handleSyncRequest));
+      app.get('/ping', _secureHandler(_handlePingRequest));
+      app.get('/devices', _secureHandler(_handleGetDevicesRequest));
 
+      // Add security middleware
       final handler = const shelf.Pipeline()
           .addMiddleware(shelf.logRequests())
+          .addMiddleware(_securityMiddleware)
           .addHandler(app);
 
       // Try to bind to specific IP first
@@ -129,8 +146,12 @@ class NetworkService {
             handler,
             InternetAddress(ipAddress!),
             serverPort,
+            // Add security options
+            securityContext: _createSecurityContext(),
           );
           print('Server started on specific IP: $ipAddress:$serverPort');
+
+          // Firewall notification is now handled by WindowsSecurityUtil
         } else {
           throw Exception('IP address not suitable for binding');
         }
@@ -143,8 +164,12 @@ class NetworkService {
           handler,
           InternetAddress.anyIPv4,
           serverPort,
+          // Add security options
+          securityContext: _createSecurityContext(),
         );
         print('Server started on all interfaces, port $serverPort');
+
+        // Firewall notification is now handled by WindowsSecurityUtil
       }
 
       isServerRunning = true;
@@ -178,6 +203,70 @@ class NetworkService {
     _server = null;
     isServerRunning = false;
     print('Server stopped');
+
+    // Also stop auto-discovery timer if it's running
+    _autoDiscoveryTimer?.cancel();
+  }
+
+  // Start auto-discovery timer for clients
+  void _startAutoDiscovery() {
+    // Cancel any existing timer
+    _autoDiscoveryTimer?.cancel();
+
+    // Run discovery immediately
+    _runAutoDiscovery();
+
+    // Then set up periodic discovery
+    _autoDiscoveryTimer = Timer.periodic(
+      Duration(seconds: autoDiscoveryIntervalSeconds),
+      (_) => _runAutoDiscovery(),
+    );
+
+    print('Auto-discovery timer started, will run every $autoDiscoveryIntervalSeconds seconds');
+  }
+
+  // Run the auto-discovery process
+  Future<void> _runAutoDiscovery() async {
+    if (deviceRole != DeviceRole.client) return;
+
+    print('Running auto-discovery...');
+    try {
+      // First check if we're already connected to a server
+      if (isConnectedToServer.value) {
+        // Try to ping the server we're connected to
+        final serverIp = connectedServerIp.value;
+        if (serverIp.isNotEmpty) {
+          final success = await pingDevice(serverIp, serverPort);
+          if (success) {
+            print('Still connected to server at $serverIp');
+            return; // We're still connected, no need to discover
+          } else {
+            print('Lost connection to server at $serverIp, will try to discover new servers');
+            isConnectedToServer.value = false;
+            connectedServerName.value = '';
+            connectedServerIp.value = '';
+          }
+        }
+      }
+
+      // Discover devices
+      await discoverDevices();
+
+      // Check if we found any servers
+      final servers = knownDevices.where((d) => d.role == DeviceRole.server).toList();
+      if (servers.isNotEmpty) {
+        // Update connection status
+        final server = servers.first;
+        isConnectedToServer.value = true;
+        connectedServerName.value = server.name;
+        connectedServerIp.value = server.ipAddress;
+        print('Connected to server: ${server.name} (${server.ipAddress})');
+      } else {
+        print('No servers found during auto-discovery');
+      }
+    } catch (e) {
+      print('Error during auto-discovery: $e');
+    }
   }
 
   // Server API handlers
@@ -246,14 +335,28 @@ class NetworkService {
       return false;
     }
 
+    // Validate IP address format and security
+    if (!_isValidIpAddress(ip) || !_isLocalNetworkAddress(ip)) {
+      developer.log('Skipping non-local or invalid IP: $ip');
+      return false;
+    }
+
     try {
       developer.log('Pinging device at $ip:$port');
 
       // Try multiple times with increasing timeouts
       for (int attempt = 1; attempt <= 2; attempt++) {
         try {
+          // Add security headers
+          final headers = {
+            'X-Client-ID': deviceId,
+            'X-Client-Name': deviceName,
+            'X-Client-Type': Platform.operatingSystem,
+          };
+
           final response = await http.get(
             Uri.parse('http://$ip:$port/ping'),
+            headers: headers,
           ).timeout(Duration(seconds: attempt));
 
           if (response.statusCode == 200) {
@@ -393,6 +496,12 @@ class NetworkService {
 
   Future<bool> sendSyncBatch(DeviceInfo targetDevice, SyncBatch batch) async {
     try {
+      // Validate target device IP for security
+      if (!_isValidIpAddress(targetDevice.ipAddress) || !_isLocalNetworkAddress(targetDevice.ipAddress)) {
+        developer.log('Refusing to send data to non-local or invalid IP: ${targetDevice.ipAddress}');
+        return false;
+      }
+
       developer.log('Sending sync batch to ${targetDevice.name} at ${targetDevice.ipAddress}:${targetDevice.port}');
 
       // First try to ping the device to make sure it's reachable
@@ -407,9 +516,17 @@ class NetworkService {
       developer.log('Sending request to: $url');
 
       try {
+        // Add security headers
+        final headers = {
+          'Content-Type': 'application/json',
+          'X-Client-ID': deviceId,
+          'X-Client-Name': deviceName,
+          'X-Client-Type': Platform.operatingSystem,
+        };
+
         final response = await http.post(
           Uri.parse(url),
-          headers: {'Content-Type': 'application/json'},
+          headers: headers,
           body: jsonEncode(batch.toMap()),
         ).timeout(const Duration(seconds: 15)); // Increased timeout
 
@@ -428,7 +545,12 @@ class NetworkService {
           developer.log('Trying alternative HTTP client for sync...');
           final client = http.Client();
           final request = http.Request('POST', Uri.parse(url));
+
+          // Add security headers
           request.headers['Content-Type'] = 'application/json';
+          request.headers['X-Client-ID'] = deviceId;
+          request.headers['X-Client-Name'] = deviceName;
+          request.headers['X-Client-Type'] = Platform.operatingSystem;
           request.body = jsonEncode(batch.toMap());
 
           final streamedResponse = await client.send(request).timeout(const Duration(seconds: 20));
@@ -473,6 +595,145 @@ class NetworkService {
       lastSeen: DateTime.now(),
     );
   }
+
+  // Security helper methods
+
+  // Create a security context for HTTPS (if needed in the future)
+  SecurityContext? _createSecurityContext() {
+    // For now, return null as we're using HTTP
+    // In a production app, you would set up SSL/TLS certificates here
+    return null;
+  }
+
+  // Security middleware to validate requests
+  shelf.Handler _securityMiddleware(shelf.Handler innerHandler) {
+    return (shelf.Request request) async {
+      // Check if request is from local network
+      final remoteAddress = request.context['shelf.io.connection_info'] as HttpConnectionInfo?;
+      if (remoteAddress == null) {
+        return shelf.Response.forbidden('Access denied: Cannot verify client');
+      }
+
+      final clientIp = remoteAddress.remoteAddress.address;
+
+      // Only allow local network connections
+      if (!_isLocalNetworkAddress(clientIp)) {
+        print('Rejected connection from non-local IP: $clientIp');
+        return shelf.Response.forbidden('Access denied: Only local network connections allowed');
+      }
+
+      // Rate limiting (simple implementation)
+      // In a real app, you would use a more sophisticated rate limiter
+      if (!_checkRateLimit(clientIp)) {
+        return shelf.Response(
+          429, // HTTP 429 Too Many Requests
+          body: 'Too many requests',
+          headers: {'Content-Type': 'text/plain'},
+        );
+      }
+
+      // Continue to the actual handler
+      return innerHandler(request);
+    };
+  }
+
+  // Wrap handlers with security checks
+  shelf.Handler _secureHandler(shelf.Handler handler) {
+    return (shelf.Request request) async {
+      try {
+        // Add request validation here if needed
+        return await handler(request);
+      } catch (e) {
+        print('Error in secure handler: $e');
+        return shelf.Response.internalServerError(
+          body: jsonEncode({'status': 'error', 'message': 'Internal server error'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+    };
+  }
+
+  // Check if an IP address is on the local network
+  bool _isLocalNetworkAddress(String ip) {
+    // Allow localhost
+    if (ip == '127.0.0.1' || ip == 'localhost' || ip == '::1') {
+      return true;
+    }
+
+    try {
+      final addr = InternetAddress(ip);
+
+      // Check if it's a private network address
+      // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+      if (addr.type == InternetAddressType.IPv4) {
+        final parts = ip.split('.');
+        if (parts.length == 4) {
+          final first = int.parse(parts[0]);
+          final second = int.parse(parts[1]);
+
+          if (first == 10) return true; // 10.x.x.x
+          if (first == 172 && second >= 16 && second <= 31) return true; // 172.16.x.x - 172.31.x.x
+          if (first == 192 && second == 168) return true; // 192.168.x.x
+        }
+      }
+
+      return false;
+    } catch (e) {
+      print('Error checking IP address: $e');
+      return false;
+    }
+  }
+
+  // Validate IP address format
+  bool _isValidIpAddress(String ip) {
+    if (ip.isEmpty) return false;
+
+    try {
+      // Check format using regex
+      final ipRegex = RegExp(
+        r'^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$'
+      );
+
+      if (!ipRegex.hasMatch(ip)) {
+        return false;
+      }
+
+      // Additional validation by trying to parse it
+      InternetAddress(ip);
+      return true;
+    } catch (e) {
+      print('Invalid IP address format: $ip');
+      return false;
+    }
+  }
+
+  // Simple rate limiting
+  final Map<String, int> _requestCounts = {};
+  final Map<String, DateTime> _lastResetTime = {};
+
+  bool _checkRateLimit(String clientIp) {
+    final now = DateTime.now();
+
+    // Reset counter if it's been more than a minute
+    if (_lastResetTime.containsKey(clientIp)) {
+      final lastReset = _lastResetTime[clientIp]!;
+      if (now.difference(lastReset).inSeconds > 60) {
+        _requestCounts[clientIp] = 0;
+        _lastResetTime[clientIp] = now;
+      }
+    } else {
+      _lastResetTime[clientIp] = now;
+      _requestCounts[clientIp] = 0;
+    }
+
+    // Increment request count
+    _requestCounts[clientIp] = (_requestCounts[clientIp] ?? 0) + 1;
+
+    // Allow up to 100 requests per minute per IP
+    return (_requestCounts[clientIp] ?? 0) <= 100;
+  }
+
+  // Firewall notification is now handled by WindowsSecurityUtil
 
   Future<void> _sendAllProductsToClient(String clientDeviceId) async {
     try {

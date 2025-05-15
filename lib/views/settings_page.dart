@@ -270,6 +270,9 @@ class SettingsPage extends StatelessWidget {
                         style: const TextStyle(fontSize: 12, color: Colors.grey),
                       ),
                       const SizedBox(height: 16),
+                      // Connection status indicator
+                      _buildConnectionStatusIndicator(compact: true),
+                      const SizedBox(height: 16),
                       SizedBox(
                         width: double.infinity,
                         child: Obx(() => ElevatedButton(
@@ -313,6 +316,9 @@ class SettingsPage extends StatelessWidget {
                         style: const TextStyle(fontSize: 12, color: Colors.grey),
                       ),
                       const SizedBox(height: 16),
+                      // Connection status indicator
+                      _buildConnectionStatusIndicator(),
+                      const SizedBox(height: 16),
                       SizedBox(
                         width: double.infinity,
                         child: Obx(() => ElevatedButton(
@@ -333,6 +339,76 @@ class SettingsPage extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  // Build connection status indicator widget
+  Widget _buildConnectionStatusIndicator({bool compact = false}) {
+    final networkService = _controller.networkService;
+
+    return Obx(() {
+      final isServer = _controller.isServer.value;
+      final isConnected = networkService.isConnectedToServer.value;
+      final serverName = networkService.connectedServerName.value;
+      final serverIp = networkService.connectedServerIp.value;
+
+      if (isServer) {
+        // Server status
+        return Container(
+          padding: EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: networkService.isServerRunning ? Colors.green.withOpacity(0.2) : Colors.grey.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.computer,
+                color: networkService.isServerRunning ? Colors.green : Colors.grey,
+                size: 20,
+              ),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  networkService.isServerRunning
+                      ? 'Server running on ${networkService.ipAddress}:${networkService.serverPort}'
+                      : 'Server not running',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+        );
+      } else {
+        // Client status
+        return Container(
+          padding: EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: isConnected ? Colors.green.withOpacity(0.2) : Colors.orange.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                isConnected ? Icons.link : Icons.link_off,
+                color: isConnected ? Colors.green : Colors.orange,
+                size: 20,
+              ),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  isConnected
+                      ? compact
+                          ? 'Connected to $serverName'
+                          : 'Connected to $serverName ($serverIp)'
+                      : 'Not connected to any server',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+    });
   }
 
   Widget _buildSyncSection() {
@@ -359,6 +435,17 @@ class SettingsPage extends StatelessWidget {
                       const SizedBox(height: 8),
                       Text('pending_items'.tr + ': ', style: const TextStyle(fontWeight: FontWeight.bold)),
                       Obx(() => Text('${_controller.pendingSyncItems}')),
+                      const SizedBox(height: 8),
+                      // Auto-sync toggle
+                      Row(
+                        children: [
+                          Obx(() => Checkbox(
+                            value: _controller.syncService.autoSyncEnabled.value,
+                            onChanged: (value) => _controller.syncService.autoSyncEnabled.value = value ?? true,
+                          )),
+                          Text('auto_sync'.tr, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        ],
+                      ),
                       const SizedBox(height: 16),
                       SizedBox(
                         width: double.infinity,
@@ -395,6 +482,17 @@ class SettingsPage extends StatelessWidget {
                         children: [
                           Text('pending_items'.tr + ': ', style: const TextStyle(fontWeight: FontWeight.bold)),
                           Obx(() => Text('${_controller.pendingSyncItems}')),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      // Auto-sync toggle
+                      Row(
+                        children: [
+                          Obx(() => Checkbox(
+                            value: _controller.syncService.autoSyncEnabled.value,
+                            onChanged: (value) => _controller.syncService.autoSyncEnabled.value = value ?? true,
+                          )),
+                          Text('auto_sync'.tr, style: const TextStyle(fontWeight: FontWeight.bold)),
                         ],
                       ),
                       const SizedBox(height: 16),
