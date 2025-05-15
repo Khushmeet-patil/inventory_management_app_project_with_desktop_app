@@ -50,6 +50,10 @@ dependencies:
   shared_preferences:
   image_picker: ^1.1.2
   path_provider: ^2.1.5
+  camera_windows: ^0.2.6+2
+  camera_platform_interface: ^2.10.0
+  camera: ^0.11.1
+  file_selector: ^1.0.3
   # The following adds the Firebase Core and Analytics libraries
 
 dev_dependencies:

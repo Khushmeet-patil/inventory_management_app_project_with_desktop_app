@@ -167,8 +167,10 @@ class _ViewStockPageState extends State<ViewStockPage> {
               autofocus: true,
               decoration: InputDecoration(
                 hintText: 'search_products'.tr,
+                hintStyle: TextStyle(color: Colors.white70),
                 border: InputBorder.none,
               ),
+              style: TextStyle(color: Colors.white),
               onChanged: _filterProducts,
             )
           : Text('view_stock'.tr)

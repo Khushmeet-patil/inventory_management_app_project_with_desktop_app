@@ -25,6 +25,54 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.2"
+  camera:
+    dependency: "direct main"
+    description:
+      name: camera
+      sha256: "413d2b34fe28496c35c69ede5b232fb9dd5ca2c3a4cb606b14efc1c7546cc8cb"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.11.1"
+  camera_android_camerax:
+    dependency: transitive
+    description:
+      name: camera_android_camerax
+      sha256: ea7e40bd63afb8f55058e48ec529ce96562be9d08393f79631a06f781161fd0d
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.6.16"
+  camera_avfoundation:
+    dependency: transitive
+    description:
+      name: camera_avfoundation
+      sha256: ca36181194f429eef3b09de3c96280f2400693f9735025f90d1f4a27465fdd72
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.9.19"
+  camera_platform_interface:
+    dependency: "direct main"
+    description:
+      name: camera_platform_interface
+      sha256: "2f757024a48696ff4814a789b0bd90f5660c0fb25f393ab4564fb483327930e2"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.10.0"
+  camera_web:
+    dependency: transitive
+    description:
+      name: camera_web
+      sha256: "595f28c89d1fb62d77c73c633193755b781c6d2e0ebcd8dc25b763b514e6ba8f"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.5"
+  camera_windows:
+    dependency: "direct main"
+    description:
+      name: camera_windows
+      sha256: c4339d71bc4256993f5c8ae2f3355463d830a5cb52851409ab1c627401c69811
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.6+2"
   characters:
     dependency: transitive
     description:
@@ -121,6 +169,30 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "7.0.1"
+  file_selector:
+    dependency: "direct main"
+    description:
+      name: file_selector
+      sha256: "5019692b593455127794d5718304ff1ae15447dea286cdda9f0db2a796a1b828"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.3"
+  file_selector_android:
+    dependency: transitive
+    description:
+      name: file_selector_android
+      sha256: "6bba3d590ee9462758879741abc132a19133600dd31832f55627442f1ebd7b54"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.5.1+14"
+  file_selector_ios:
+    dependency: transitive
+    description:
+      name: file_selector_ios
+      sha256: "94b98ad950b8d40d96fee8fa88640c2e4bd8afcdd4817993bd04e20310f45420"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.5.3+1"
   file_selector_linux:
     dependency: transitive
     description:
@@ -145,6 +217,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.6.2"
+  file_selector_web:
+    dependency: transitive
+    description:
+      name: file_selector_web
+      sha256: c4c0ea4224d97a60a7067eca0c8fd419e708ff830e0c83b11a48faf566cec3e7
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.9.4+2"
   file_selector_windows:
     dependency: transitive
     description:
@@ -677,6 +757,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.4"
+  stream_transform:
+    dependency: transitive
+    description:
+      name: stream_transform
+      sha256: ad47125e588cfd37a9a7f86c7d6356dde8dfe89d071d293f80ca9e9273a33871
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.1.1"
   string_scanner:
     dependency: transitive
     description:
