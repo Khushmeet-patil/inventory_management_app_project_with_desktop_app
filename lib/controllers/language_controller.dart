@@ -8,7 +8,6 @@ class LanguageController extends GetxController {
   final RxString currentLanguage = 'en'.obs;
   final List<Map<String, dynamic>> availableLanguages = [
     {'code': 'en', 'name': 'English', 'flag': '🇺🇸'},
-    {'code': 'es', 'name': 'Español', 'flag': '🇪🇸'},
     {'code': 'hi', 'name': 'हिंदी', 'flag': '🇮🇳'},
     {'code': 'gu', 'name': 'ગુજરાતી', 'flag': '🇮🇳'},
   ];
