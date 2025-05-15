@@ -51,5 +51,11 @@
 	<array>
 		<string>_inventory-sync._tcp</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>This app needs camera access to scan barcodes and capture product images</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>This app needs photo library access to select product images</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>This app may require microphone access for full camera functionality</string>
 </dict>
 </plist>
