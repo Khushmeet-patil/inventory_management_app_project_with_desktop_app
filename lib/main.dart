@@ -53,6 +53,7 @@ class InventoryApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'Inventory Management',
       navigatorKey: ToastUtil.navigatorKey,
       theme: ThemeData(

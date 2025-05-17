@@ -38,8 +38,12 @@ class NetworkService {
   final RxString connectedServerIp = ''.obs;
 
   // Auto-discovery settings
-  final int autoDiscoveryIntervalSeconds = 30; // How often to auto-discover servers
+  final int autoDiscoveryIntervalSeconds = 10; // Reduced from 30 to 10 seconds for faster reconnection
   Timer? _autoDiscoveryTimer;
+
+  // Connection caching
+  final Map<String, DateTime> _lastSuccessfulConnections = {};
+  final Duration _connectionCacheValidity = Duration(minutes: 5);
 
   // Callbacks
   Function(SyncBatch)? onSyncBatchReceived;
@@ -341,10 +345,21 @@ class NetworkService {
       return false;
     }
 
+    // Check if we've successfully connected to this IP recently
+    final cacheKey = '$ip:$port';
+    final lastSuccess = _lastSuccessfulConnections[cacheKey];
+    if (lastSuccess != null) {
+      final timeSinceLastSuccess = DateTime.now().difference(lastSuccess);
+      if (timeSinceLastSuccess < _connectionCacheValidity) {
+        // We've connected to this IP recently, try it with higher priority
+        developer.log('Recently connected to $ip:$port (${timeSinceLastSuccess.inSeconds}s ago)');
+      }
+    }
+
     try {
       developer.log('Pinging device at $ip:$port');
 
-      // Try multiple times with increasing timeouts
+      // Try multiple times with shorter timeouts
       for (int attempt = 1; attempt <= 2; attempt++) {
         try {
           // Add security headers
@@ -354,10 +369,11 @@ class NetworkService {
             'X-Client-Type': Platform.operatingSystem,
           };
 
+          // Reduced timeout from seconds to milliseconds
           final response = await http.get(
             Uri.parse('http://$ip:$port/ping'),
             headers: headers,
-          ).timeout(Duration(seconds: attempt));
+          ).timeout(Duration(milliseconds: attempt == 1 ? 500 : 1000));
 
           if (response.statusCode == 200) {
             try {
@@ -371,6 +387,10 @@ class NetworkService {
                 return true;
               }
 
+              // Update connection cache for faster reconnection
+              final cacheKey = '$ip:$port';
+              _lastSuccessfulConnections[cacheKey] = DateTime.now();
+
               // Update known devices
               final existingIndex = knownDevices.indexWhere((d) => d.id == device.id);
               if (existingIndex >= 0) {
@@ -382,6 +402,11 @@ class NetworkService {
               // If this is a server, make sure to save it to the database
               if (device.role == DeviceRole.server) {
                 developer.log('Found a server! ${device.name} (${device.ipAddress})');
+
+                // Update connection status immediately for faster UI feedback
+                isConnectedToServer.value = true;
+                connectedServerName.value = device.name;
+                connectedServerIp.value = device.ipAddress;
               }
 
               return true;
@@ -409,8 +434,10 @@ class NetworkService {
   Future<List<DeviceInfo>> discoverDevices() async {
     if (ipAddress == null) return [];
 
-    // Clear previous devices
-    knownDevices.clear();
+    // Don't clear previous devices immediately to avoid UI flicker
+    // We'll update them as we go
+    final previousDevices = List<DeviceInfo>.from(knownDevices);
+    final newDevices = <DeviceInfo>[];
 
     // Store self device info but don't add to the list shown to users
     final selfDevice = getLocalDeviceInfo();
@@ -419,7 +446,7 @@ class NetworkService {
     // Only add self to known devices if we're a server
     // Clients don't need to see themselves in the list
     if (deviceRole == DeviceRole.server) {
-      knownDevices.add(selfDevice);
+      newDevices.add(selfDevice);
       developer.log('Added self (server) to known devices list');
     }
 
@@ -432,13 +459,46 @@ class NetworkService {
     final baseIp = '${segments[0]}.${segments[1]}.${segments[2]}';
     developer.log('Scanning network with base IP: $baseIp');
 
-    // First try common IPs (1, 100-105, 254) for faster discovery
+    // First check recently successful connections
+    final recentConnections = <String>[];
+    _lastSuccessfulConnections.forEach((key, timestamp) {
+      if (DateTime.now().difference(timestamp) < _connectionCacheValidity) {
+        final parts = key.split(':');
+        if (parts.length == 2) {
+          final ip = parts[0];
+          if (ip != ipAddress) {
+            recentConnections.add(ip);
+          }
+        }
+      }
+    });
+
+    // Try recent connections first with a short timeout
+    if (recentConnections.isNotEmpty) {
+      developer.log('Trying ${recentConnections.length} recent connections first');
+      final recentFutures = <Future<bool>>[];
+
+      for (final ip in recentConnections) {
+        recentFutures.add(pingDevice(ip, serverPort));
+      }
+
+      // Wait for recent connections with a short timeout
+      await Future.wait(recentFutures);
+
+      // If we found a server, we can stop here
+      if (knownDevices.any((device) => device.role == DeviceRole.server && device.id != deviceId)) {
+        developer.log('Found server in recent connections, stopping discovery');
+        return knownDevices;
+      }
+    }
+
+    // Try common IPs (1, 100-105, 254) for faster discovery
     final commonIps = [1, 100, 101, 102, 103, 104, 105, 254];
     final commonFutures = <Future<bool>>[];
 
     for (int i in commonIps) {
       final ip = '$baseIp.$i';
-      if (ip != ipAddress) {
+      if (ip != ipAddress && !recentConnections.contains(ip)) {
         commonFutures.add(pingDevice(ip, serverPort));
       }
     }
@@ -458,35 +518,52 @@ class NetworkService {
       await pingDevice(manualIpAddress!, serverPort);
     }
 
-    // If we still don't have a server, scan more IPs
+    // If we still don't have a server, scan more IPs but in parallel batches
     if (!knownDevices.any((device) => device.role == DeviceRole.server && device.id != deviceId)) {
-      developer.log('No server found yet, scanning more IPs');
+      developer.log('No server found yet, scanning more IPs in parallel');
 
-      // Try to scan the entire subnet in batches to avoid overwhelming the network
-      for (int batch = 0; batch < 5; batch++) {
-        final futures = <Future<bool>>[];
-        final startRange = batch * 50 + 1;
-        final endRange = startRange + 49;
+      // Scan in parallel with multiple smaller batches
+      final allFutures = <Future<bool>>[];
+      final batchSize = 25; // Smaller batch size for more parallelism
+      final totalBatches = 10; // Scan more IPs in parallel
 
-        developer.log('Scanning IP range $startRange-$endRange');
+      for (int batch = 0; batch < totalBatches; batch++) {
+        final startRange = batch * batchSize + 1;
+        final endRange = startRange + batchSize - 1;
 
-        for (int i = startRange; i <= endRange; i++) {
-          if (i > 254) break; // Valid IP range is 1-254
+        if (startRange > 254) break; // Don't exceed valid IP range
 
+        developer.log('Preparing IP batch $startRange-$endRange');
+
+        for (int i = startRange; i <= endRange && i <= 254; i++) {
           final ip = '$baseIp.$i';
-          if (ip != ipAddress && !commonIps.contains(i)) {
-            futures.add(pingDevice(ip, serverPort));
+          if (ip != ipAddress && !commonIps.contains(i) && !recentConnections.contains(ip)) {
+            allFutures.add(pingDevice(ip, serverPort));
           }
         }
+      }
 
-        // Wait for this batch to complete
-        await Future.wait(futures);
+      // Process all batches in parallel with a timeout
+      if (allFutures.isNotEmpty) {
+        developer.log('Scanning ${allFutures.length} IPs in parallel');
+        await Future.wait(allFutures).timeout(
+          const Duration(seconds: 3),
+          onTimeout: () {
+            developer.log('IP scan timeout reached, continuing with discovered devices');
+            return [];
+          },
+        );
+      }
+    }
 
-        // If we found a server, we can stop scanning
-        if (knownDevices.any((device) => device.role == DeviceRole.server && device.id != deviceId)) {
-          developer.log('Found server, stopping IP scan');
-          break;
-        }
+    // Update the knownDevices list with new discoveries
+    knownDevices.clear();
+    knownDevices.addAll(newDevices);
+
+    // Add any devices we found during scanning
+    for (final device in previousDevices) {
+      if (!knownDevices.any((d) => d.id == device.id)) {
+        knownDevices.add(device);
       }
     }
 
@@ -504,12 +581,12 @@ class NetworkService {
 
       developer.log('Sending sync batch to ${targetDevice.name} at ${targetDevice.ipAddress}:${targetDevice.port}');
 
-      // First try to ping the device to make sure it's reachable
-      final pingSuccess = await pingDevice(targetDevice.ipAddress, targetDevice.port);
-      if (!pingSuccess) {
-        developer.log('Warning: Could not ping device before sending sync batch. Will try anyway.');
-        // Continue anyway - sometimes ping fails but HTTP works
-      }
+      // Update connection cache for this device
+      final cacheKey = '${targetDevice.ipAddress}:${targetDevice.port}';
+      _lastSuccessfulConnections[cacheKey] = DateTime.now();
+
+      // Skip ping and try to send data directly for faster operation
+      // This is more efficient since we'll know if it fails anyway
 
       // Try to send the sync batch
       final url = 'http://${targetDevice.ipAddress}:${targetDevice.port}/sync';
@@ -524,11 +601,12 @@ class NetworkService {
           'X-Client-Type': Platform.operatingSystem,
         };
 
+        // Reduced timeout from 15 to 5 seconds for faster failure detection
         final response = await http.post(
           Uri.parse(url),
           headers: headers,
           body: jsonEncode(batch.toMap()),
-        ).timeout(const Duration(seconds: 15)); // Increased timeout
+        ).timeout(const Duration(seconds: 5));
 
         if (response.statusCode == 200) {
           developer.log('Successfully sent sync batch to ${targetDevice.ipAddress}');
@@ -540,7 +618,7 @@ class NetworkService {
       } catch (httpError) {
         developer.log('HTTP error sending sync batch: $httpError');
 
-        // Try one more time with a different approach
+        // Try one more time with a different approach and shorter timeout
         try {
           developer.log('Trying alternative HTTP client for sync...');
           final client = http.Client();
@@ -553,7 +631,8 @@ class NetworkService {
           request.headers['X-Client-Type'] = Platform.operatingSystem;
           request.body = jsonEncode(batch.toMap());
 
-          final streamedResponse = await client.send(request).timeout(const Duration(seconds: 20));
+          // Reduced timeout from 20 to 8 seconds
+          final streamedResponse = await client.send(request).timeout(const Duration(seconds: 8));
           final response = await http.Response.fromStream(streamedResponse);
           client.close();
 

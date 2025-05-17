@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../models/product_model.dart';
 import '../models/history_model.dart';
 import '../models/sync_model.dart';
+import '../utils/database_batch_util.dart';
 
 class DatabaseService {
   static final DatabaseService instance = DatabaseService._init();
@@ -352,6 +353,10 @@ class DatabaseService {
 
   Future<List<SyncItem>> getPendingSyncItems() async {
     final db = await database;
+
+    // Optimize sync queue before retrieving items
+    await DatabaseBatchUtil.optimizeSyncQueue(db);
+
     final maps = await db.query(
       'sync_queue',
       where: 'status = ?',
@@ -431,7 +436,7 @@ class DatabaseService {
 
   Future<Product> addProductWithSync(Product product) async {
     try {
-      print('Adding product with sync: ${product.name}, barcode: ${product.barcode}');
+      // Minimize logging for better performance
       final syncId = const Uuid().v4();
       final now = DateTime.now();
 
@@ -440,12 +445,24 @@ class DatabaseService {
         lastSynced: now,
       );
 
-      final addedProduct = await addProduct(productWithSync);
-      print('Product added successfully: ID=${addedProduct.id}, syncId=${addedProduct.syncId}');
-
-      // Add to sync queue
-      await addToSyncQueue(SyncItem.fromProduct(addedProduct, SyncOperation.add));
-      print('Product added to sync queue');
+      // Use optimized batch operation instead of separate calls
+      final db = await database;
+      final addedProduct = await DatabaseBatchUtil.addProductWithHistory(
+        db,
+        productWithSync,
+        ProductHistory(
+          id: 0,
+          productId: 0, // Will be updated in the batch operation
+          productName: product.name,
+          barcode: product.barcode,
+          quantity: product.quantity ?? 0,
+          type: HistoryType.added_stock,
+          rentedDate: DateTime.now(),
+          createdAt: DateTime.now(),
+          syncId: const Uuid().v4(),
+          lastSynced: now,
+        ),
+      );
 
       return addedProduct;
     } catch (e) {
@@ -456,7 +473,6 @@ class DatabaseService {
 
   Future<void> updateProductWithSync(Product product) async {
     try {
-      print('Updating product with sync: ID=${product.id}, Name=${product.name}, Quantity=${product.quantity}');
       final now = DateTime.now();
       final updatedProduct = product.copyWith(
         lastSynced: now,
@@ -464,12 +480,32 @@ class DatabaseService {
         syncId: product.syncId ?? const Uuid().v4(),
       );
 
-      await updateProduct(updatedProduct);
-      print('Product updated successfully');
+      // Use optimized batch operation for better performance
+      print('Optimizing product update with batch operation');
+      final db = await database;
+      await db.transaction((txn) async {
+        final batch = txn.batch();
 
-      // Add to sync queue
-      await addToSyncQueue(SyncItem.fromProduct(updatedProduct, SyncOperation.update));
-      print('Product update added to sync queue');
+        // Update product
+        batch.update(
+          'products',
+          updatedProduct.toMap(),
+          where: 'id = ?',
+          whereArgs: [updatedProduct.id],
+        );
+
+        // Add to sync queue
+        batch.insert(
+          'sync_queue',
+          SyncItem.fromProduct(updatedProduct, SyncOperation.update).toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+
+        // Commit batch operation (faster than individual operations)
+        print('Committing batch update operation');
+        await batch.commit(noResult: true);
+        print('Batch update completed successfully');
+      });
     } catch (e) {
       print('Error in updateProductWithSync: $e');
       rethrow;
@@ -487,9 +523,18 @@ class DatabaseService {
       lastSynced: now,
     );
 
-    await addHistory(historyWithSync);
+    // Use transaction for better performance
+    final db = await database;
+    await db.transaction((txn) async {
+      // Add history
+      await txn.insert('product_history', historyWithSync.toMap());
 
-    // Add to sync queue
-    await addToSyncQueue(SyncItem.fromHistory(historyWithSync, SyncOperation.add));
+      // Add to sync queue
+      await txn.insert(
+        'sync_queue',
+        SyncItem.fromHistory(historyWithSync, SyncOperation.add).toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    });
   }
 }

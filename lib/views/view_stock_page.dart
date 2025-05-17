@@ -105,6 +105,7 @@ class _ViewStockPageState extends State<ViewStockPage> {
                 // Product details
                 _detailRow('Name', product.name),
                 _detailRow('Barcode', product.barcode),
+                _detailRow('Number of Units', '${product.quantity ?? 0}'),
                 _detailRow('Price', '₹${product.pricePerQuantity.toStringAsFixed(2)}'),
                 if (product.rentPrice != null) _detailRow('Rent Price', '₹${product.rentPrice!.toStringAsFixed(2)}'),
                 if (product.unitType != null) _detailRow('Unit Type', product.unitType!),
@@ -257,6 +258,7 @@ class _ViewStockPageState extends State<ViewStockPage> {
                                 ),
                                 SizedBox(height: 4),
                                 Text('Barcode: ${product.barcode}'),
+                                Text('Number of Units: ${product.quantity ?? 0}'),
                                 if (product.unitType != null) Text('Unit Type: ${product.unitType}'),
                                 if (product.rentPrice != null) Text('Rent: ₹${product.rentPrice!.toStringAsFixed(2)}'),
                               ],

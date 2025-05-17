@@ -67,8 +67,6 @@ class ProductController extends GetxController {
 
   Future<void> addNewProduct(Product product) async {
     try {
-      print('Adding new product: ${product.name}, barcode: ${product.barcode}');
-
       // Validate product data
       if (product.barcode.isEmpty) {
         ToastUtil.showError('Barcode cannot be empty');
@@ -80,41 +78,23 @@ class ProductController extends GetxController {
         return;
       }
 
-      // Quantity check removed as it's now optional
-
-      // Add the product
+      // Add the product - this now handles history entry in a single transaction
       final addedProduct = await _dbService.addProductWithSync(product);
-      print('Product added successfully: ID=${addedProduct.id}');
 
-      // Add history entry
-      await _dbService.addHistoryWithSync(ProductHistory(
-        id: 0,
-        productId: addedProduct.id,
-        productName: product.name,
-        barcode: product.barcode,
-        quantity: product.quantity ?? 0,
-        type: HistoryType.added_stock,
-        rentedDate: DateTime.now(),
-        createdAt: DateTime.now(),
-      ));
-      print('History entry added');
+      // Reload data without immediate sync for better performance
+      await loadData();
 
-      // Sync with server and reload data
-      await syncAndReload();
+      // Schedule a sync in the background
+      _syncService.syncImmediately().catchError((e) {
+        print('Background sync error: $e');
+        // Ignore sync errors to keep UI responsive
+      });
 
       // Show success message
-      try {
-        ToastUtil.showSuccess('Product added successfully');
-      } catch (toastError) {
-        print('Error showing toast: $toastError');
-      }
+      ToastUtil.showSuccess('Product added successfully');
     } catch (e) {
       print('Error adding new product: $e');
-      try {
-        ToastUtil.showError('Failed to add product: $e');
-      } catch (toastError) {
-        print('Error showing toast: $toastError');
-      }
+      ToastUtil.showError('Failed to add product');
     }
   }
 
@@ -370,15 +350,21 @@ class ProductController extends GetxController {
       await _dbService.updateProductWithSync(product);
       print('Product updated successfully');
 
-      // Sync with server and reload data
-      await syncAndReload();
-
       // Show success message
       try {
         ToastUtil.showSuccess('Product updated successfully');
       } catch (toastError) {
         print('Error showing toast: $toastError');
       }
+
+      // Schedule a background sync instead of waiting for it
+      _syncService.syncImmediately().catchError((e) {
+        print('Background sync error: $e');
+        // Ignore sync errors to keep UI responsive
+      });
+
+      // Reload data locally without waiting for sync
+      loadData();
     } catch (e) {
       print('Error updating product: $e');
       try {

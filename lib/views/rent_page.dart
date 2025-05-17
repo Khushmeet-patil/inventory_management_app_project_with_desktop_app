@@ -60,7 +60,7 @@ class _RentPageState extends State<RentPage> {
               ],
             ),
             TextField(
-              decoration: InputDecoration(labelText: 'quantity'.tr),
+              decoration: InputDecoration(labelText: 'number_of_units'.tr),
               keyboardType: TextInputType.number,
               onChanged: (value) => quantity = int.tryParse(value) ?? 0,
             ),
@@ -158,7 +158,7 @@ class _RentPageState extends State<RentPage> {
                   return Card(
                     child: ListTile(
                       title: Text('barcode'.tr + ': ${item['barcode']}'),
-                      subtitle: Text('qty'.tr + ': ${item['quantity']}, ' + 'days'.tr + ': ${item['rentalDays']}'),
+                      subtitle: Text('units'.tr + ': ${item['quantity']}, ' + 'days'.tr + ': ${item['rentalDays']}'),
                       trailing: IconButton(
                         icon: Icon(Icons.delete, color: Colors.red),
                         onPressed: () => setState(() => _rentList.removeAt(index)),

@@ -17,7 +17,7 @@ class _AddProductPageState extends State<AddProductPage> {
   bool _isExisting = false;
   final _barcodeController = TextEditingController();
   final _nameController = TextEditingController();
-  final _quantityController = TextEditingController();
+  // Removed quantity controller as we're using number of units instead
   final _priceController = TextEditingController();
   final _unitTypeController = TextEditingController();
   final _numberOfUnitsController = TextEditingController();
@@ -29,6 +29,24 @@ class _AddProductPageState extends State<AddProductPage> {
   final _weightController = TextEditingController();
   final _rentPriceController = TextEditingController();
   String? _photoPath;
+
+  @override
+  void dispose() {
+    _barcodeController.dispose();
+    _nameController.dispose();
+    // Removed quantity controller disposal
+    _priceController.dispose();
+    _unitTypeController.dispose();
+    _numberOfUnitsController.dispose();
+    _sizeWidth.dispose();
+    _sizeHeight.dispose();
+    _sizeUnitController.dispose();
+    _colorController.dispose();
+    _materialController.dispose();
+    _weightController.dispose();
+    _rentPriceController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +73,14 @@ class _AddProductPageState extends State<AddProductPage> {
                   ),
                 ),
               ),
+              if (_isExisting) ...[
+                // Number of units field for existing products
+                TextField(
+                  controller: _numberOfUnitsController,
+                  decoration: InputDecoration(labelText: 'number_of_units'.tr),
+                  keyboardType: TextInputType.number,
+                ),
+              ],
               if (!_isExisting) ...[
                 // Product image
                 GestureDetector(
@@ -237,8 +263,9 @@ class _AddProductPageState extends State<AddProductPage> {
     }
 
     if (_isExisting) {
-      // For existing products, we'll use a default quantity of 1
-      await _controller.addExistingStock(_barcodeController.text, 1);
+      // Get number of units from the controller, default to 1 if empty
+      final units = int.tryParse(_numberOfUnitsController.text) ?? 1;
+      await _controller.addExistingStock(_barcodeController.text, units);
     } else {
       if (_nameController.text.isEmpty || _priceController.text.isEmpty) {
         try {
@@ -248,11 +275,14 @@ class _AddProductPageState extends State<AddProductPage> {
         }
         return;
       }
+      // Get number of units from the controller, default to 1 if empty
+      final units = int.tryParse(_numberOfUnitsController.text) ?? 1;
+
       final product = Product(
         id: 0,
         barcode: _barcodeController.text,
         name: _nameController.text,
-        quantity: 1, // Default quantity is 1
+        quantity: units, // Use the number of units as the quantity
         pricePerQuantity: double.tryParse(_priceController.text) ?? 0.0,
         photo: _photoPath,
         unitType: _unitTypeController.text.isEmpty ? null : _unitTypeController.text,

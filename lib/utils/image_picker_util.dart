@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import 'package:uuid/uuid.dart';
+import 'image_optimizer_util.dart';
 
 class ImagePickerUtil {
   static final ImagePicker _picker = ImagePicker();
@@ -15,7 +17,7 @@ class ImagePickerUtil {
         source: ImageSource.camera,
         imageQuality: 80, // Reduce image quality to save space
       );
-      
+
       if (image != null) {
         return await _saveImageToAppDirectory(image);
       }
@@ -33,7 +35,7 @@ class ImagePickerUtil {
         source: ImageSource.gallery,
         imageQuality: 80, // Reduce image quality to save space
       );
-      
+
       if (image != null) {
         return await _saveImageToAppDirectory(image);
       }
@@ -49,20 +51,28 @@ class ImagePickerUtil {
     try {
       // Get app documents directory
       final Directory appDir = await getApplicationDocumentsDirectory();
-      
+
       // Create a directory for product images if it doesn't exist
       final String productImagesDir = path.join(appDir.path, 'product_images');
       await Directory(productImagesDir).create(recursive: true);
-      
+
       // Generate a unique filename
       final String fileName = '${const Uuid().v4()}${path.extension(image.path)}';
       final String savedPath = path.join(productImagesDir, fileName);
-      
+
       // Copy the image to the app directory
       final File savedImage = File(savedPath);
       await savedImage.writeAsBytes(await image.readAsBytes());
-      
+
       print('Image saved to: $savedPath');
+
+      // Optimize the image
+      final String? optimizedPath = await ImageOptimizerUtil.compressAndSaveImage(savedPath);
+      if (optimizedPath != null) {
+        print('Image optimized: $optimizedPath');
+        return optimizedPath;
+      }
+
       return savedPath;
     } catch (e) {
       print('Error saving image: $e');
@@ -71,7 +81,7 @@ class ImagePickerUtil {
     }
   }
 
-  // Get image widget from path
+  // Get image widget from path with caching
   static Widget getImageWidget(String? imagePath, {double width = 100, double height = 100}) {
     if (imagePath == null || imagePath.isEmpty) {
       return Container(
@@ -81,23 +91,53 @@ class ImagePickerUtil {
         child: Icon(Icons.image_not_supported, color: Colors.grey[600]),
       );
     }
-    
+
     try {
-      return Image.file(
-        File(imagePath),
-        width: width,
-        height: height,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
-          print('Error loading image: $error');
-          return Container(
-            width: width,
-            height: height,
-            color: Colors.grey[300],
-            child: Icon(Icons.broken_image, color: Colors.grey[600]),
-          );
-        },
-      );
+      // Check if the file exists locally
+      final file = File(imagePath);
+      if (file.existsSync()) {
+        // Use cached image provider for better performance
+        return Image.file(
+          file,
+          width: width,
+          height: height,
+          fit: BoxFit.cover,
+          cacheWidth: width.toInt() * 2, // Cache at 2x display size for better quality
+          errorBuilder: (context, error, stackTrace) {
+            print('Error loading image: $error');
+            return Container(
+              width: width,
+              height: height,
+              color: Colors.grey[300],
+              child: Icon(Icons.broken_image, color: Colors.grey[600]),
+            );
+          },
+        );
+      } else {
+        // If file doesn't exist locally, try to load from cache
+        return FutureBuilder<File>(
+          future: DefaultCacheManager().getSingleFile(imagePath),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.done &&
+                snapshot.hasData) {
+              return Image.file(
+                snapshot.data!,
+                width: width,
+                height: height,
+                fit: BoxFit.cover,
+                cacheWidth: width.toInt() * 2,
+              );
+            } else {
+              return Container(
+                width: width,
+                height: height,
+                color: Colors.grey[300],
+                child: Icon(Icons.hourglass_empty, color: Colors.grey[600]),
+              );
+            }
+          },
+        );
+      }
     } catch (e) {
       print('Error creating image widget: $e');
       return Container(

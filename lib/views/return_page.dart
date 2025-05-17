@@ -60,7 +60,7 @@ class _ReturnPageState extends State<ReturnPage> {
               ],
             ),
             TextField(
-              decoration: InputDecoration(labelText: 'quantity'.tr),
+              decoration: InputDecoration(labelText: 'number_of_units'.tr),
               keyboardType: TextInputType.number,
               onChanged: (value) => quantity = int.tryParse(value) ?? 0,
             ),
@@ -84,7 +84,7 @@ class _ReturnPageState extends State<ReturnPage> {
                 Get.back();
               } else {
                 try {
-                  ToastUtil.showError('fill_barcode_quantity'.tr);
+                  ToastUtil.showError('fill_barcode_units'.tr);
                 } catch (e) {
                   print('Error showing toast: $e');
                 }
@@ -157,7 +157,7 @@ class _ReturnPageState extends State<ReturnPage> {
                   return Card(
                     child: ListTile(
                       title: Text('barcode'.tr + ': ${item['barcode']}'),
-                      subtitle: Text('qty'.tr + ': ${item['quantity']}, ' + 'notes'.tr + ': ${item['notes'].isEmpty ? 'n_a'.tr : item['notes']}'),
+                      subtitle: Text('units'.tr + ': ${item['quantity']}, ' + 'notes'.tr + ': ${item['notes'].isEmpty ? 'n_a'.tr : item['notes']}'),
                       trailing: IconButton(
                         icon: Icon(Icons.delete, color: Colors.red),
                         onPressed: () => setState(() => _returnList.removeAt(index)),

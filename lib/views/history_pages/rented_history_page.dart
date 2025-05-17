@@ -96,7 +96,7 @@ class RentalHistoryPage extends StatelessWidget {
                     leading: Icon(Icons.shopping_cart, color: Colors.teal),
                     title: Text(history.productName),
                     subtitle: Text(
-                        'Barcode: ${history.barcode}\nQty: ${history.quantity}, To: ${history.givenTo}, Agency: ${history.agency ?? 'N/A'}, Days: ${history.rentalDays}'),
+                        'Barcode: ${history.barcode}\nUnits: ${history.quantity}, To: ${history.givenTo}, Agency: ${history.agency ?? 'N/A'}, Days: ${history.rentalDays}'),
                     trailing: Text(history.createdAt.toString().substring(0, 16)),
                   ),
                 );
@@ -113,7 +113,7 @@ class RentalHistoryPage extends StatelessWidget {
                     children: items.map((item) => ListTile(
                       contentPadding: EdgeInsets.only(left: 32.0, right: 16.0),
                       title: Text(item.productName),
-                      subtitle: Text('Barcode: ${item.barcode}, Qty: ${item.quantity}'),
+                      subtitle: Text('Barcode: ${item.barcode}, Units: ${item.quantity}'),
                     )).toList(),
                   ),
                 );

@@ -46,7 +46,7 @@ class AddedProductHistoryPage extends StatelessWidget {
               child: ListTile(
                 leading: Icon(Icons.add_box, color: Colors.teal),
                 title: Text(history.productName),
-                subtitle: Text('Barcode: ${history.barcode}\nQty: ${history.quantity}'),
+                subtitle: Text('Barcode: ${history.barcode}\nUnits: ${history.quantity}'),
                 trailing: Text(history.createdAt.toString().substring(0, 16)),
               ),
             );

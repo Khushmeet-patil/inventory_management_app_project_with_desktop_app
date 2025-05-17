@@ -22,7 +22,11 @@ class SyncService {
 
   // Sync timer
   Timer? _syncTimer;
-  final int syncIntervalSeconds = 5; // Reduced to 5 seconds for more frequent syncing
+  final int syncIntervalSeconds = 3; // Reduced to 3 seconds for more frequent syncing
+
+  // Connection optimization
+  bool _isFirstSync = true;
+  DateTime? _lastSuccessfulSync;
 
   // Auto-sync settings
   final RxBool autoSyncEnabled = true.obs; // Enable auto-sync by default
@@ -70,14 +74,10 @@ class SyncService {
   }
 
   Future<void> syncWithServer() async {
-    // If already syncing, wait a bit and return
+    // If already syncing, return immediately instead of waiting
     if (isSyncing.value) {
-      print('Sync already in progress, waiting...');
-      await Future.delayed(Duration(milliseconds: 500));
-      if (isSyncing.value) {
-        print('Sync still in progress after waiting, skipping this request');
-        return;
-      }
+      print('Sync already in progress, skipping this request');
+      return;
     }
 
     isSyncing.value = true;
@@ -85,13 +85,22 @@ class SyncService {
     print('Starting sync process');
 
     try {
-      // First try to discover devices to ensure we have the latest server info
-      try {
-        print('Discovering devices before sync...');
-        await _networkService.discoverDevices();
-      } catch (e) {
-        print('Error discovering devices: $e');
-        // Continue anyway
+      // Only do full device discovery on first sync or if last sync was a while ago
+      final bool needsFullDiscovery = _isFirstSync ||
+          (_lastSuccessfulSync == null ||
+           DateTime.now().difference(_lastSuccessfulSync!).inMinutes > 5);
+
+      if (needsFullDiscovery) {
+        try {
+          print('Performing full device discovery...');
+          await _networkService.discoverDevices();
+          _isFirstSync = false;
+        } catch (e) {
+          print('Error discovering devices: $e');
+          // Continue anyway
+        }
+      } else {
+        print('Skipping full discovery, using cached server information');
       }
 
       // Find server devices
@@ -128,25 +137,44 @@ class SyncService {
         timestamp: DateTime.now(),
       );
 
-      // Try each server until one works
+      // Try all servers in parallel for faster connection
       bool syncSuccess = false;
       String errorMessage = '';
+      DeviceInfo? successfulServer;
 
-      for (final server in servers) {
-        print('Trying to sync with server: ${server.name} (${server.ipAddress})');
-        try {
-          // First try to ping the server
-          final pingSuccess = await _networkService.pingDevice(server.ipAddress, server.port);
-          if (!pingSuccess) {
-            print('Warning: Could not ping server ${server.ipAddress}. Will try to sync anyway.');
+      if (servers.isNotEmpty) {
+        print('Trying to sync with ${servers.length} servers in parallel');
+
+        // Create a list of futures for parallel execution
+        final List<Future<Map<String, dynamic>>> syncFutures = servers.map((server) async {
+          try {
+            // Skip ping and try to send data directly
+            print('Attempting to sync with server: ${server.name} (${server.ipAddress})');
+            final success = await _networkService.sendSyncBatch(server, testBatch);
+
+            return {
+              'server': server,
+              'success': success,
+              'error': success ? null : 'Failed to connect'
+            };
+          } catch (e) {
+            print('Error syncing with server ${server.ipAddress}: $e');
+            return {
+              'server': server,
+              'success': false,
+              'error': 'Error: $e'
+            };
           }
+        }).toList();
 
-          // Send to server
-          final success = await _networkService.sendSyncBatch(server, testBatch);
+        // Wait for the first successful connection or all to complete
+        final results = await Future.wait(syncFutures);
 
-          if (success) {
-            print('Successfully connected to server ${server.ipAddress}');
+        // Find the first successful connection
+        for (final result in results) {
+          if (result['success'] == true) {
             syncSuccess = true;
+            successfulServer = result['server'] as DeviceInfo;
 
             // If we have pending items, update their status
             if (pendingItems.isNotEmpty) {
@@ -158,17 +186,19 @@ class SyncService {
               syncStatus.value = 'Connected to server';
             }
 
-            // Request all products from server to ensure we have the latest data
-            await _requestLatestDataFromServer(server);
+            // Update last successful sync time
+            _lastSuccessfulSync = DateTime.now();
 
-            break; // Exit the loop if successful
+            // Request all products from server to ensure we have the latest data
+            await _requestLatestDataFromServer(successfulServer);
+
+            break; // Exit the loop once we find a successful connection
           } else {
-            print('Failed to sync with server ${server.ipAddress}');
-            errorMessage = 'Failed to connect to server';
+            // Collect error message from the first failure if we don't have one yet
+            if (errorMessage.isEmpty) {
+              errorMessage = result['error'] as String? ?? 'Unknown error';
+            }
           }
-        } catch (e) {
-          print('Error syncing with server ${server.ipAddress}: $e');
-          errorMessage = 'Error: $e';
         }
       }
 
@@ -450,10 +480,7 @@ class SyncService {
     try {
       print('Requesting latest data from server: ${server.name} (${server.ipAddress})');
 
-      // First, send all our local products to the server
-      await _sendAllLocalProductsToServer(server);
-
-      // Then, create a special sync batch that requests all products
+      // Create a special sync batch that requests all products
       final requestBatch = SyncBatch(
         id: const Uuid().v4(),
         deviceId: _networkService.deviceId,
@@ -461,11 +488,19 @@ class SyncService {
         timestamp: DateTime.now(),
       );
 
-      // Send request to server
+      // Send request to server first to get latest data
       final success = await _networkService.sendSyncBatch(server, requestBatch);
 
       if (success) {
         print('Successfully requested data from server');
+
+        // Then, send all our local products to the server in the background
+        // This way we don't block the UI waiting for the upload to complete
+        _sendAllLocalProductsToServer(server).then((_) {
+          print('Finished sending local products to server in background');
+        }).catchError((e) {
+          print('Error sending local products in background: $e');
+        });
       } else {
         print('Failed to request data from server');
       }

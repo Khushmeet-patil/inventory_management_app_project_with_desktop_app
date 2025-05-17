@@ -17,10 +17,12 @@ class EditProductPage extends StatefulWidget {
 }
 
 class _EditProductPageState extends State<EditProductPage> {
+  bool _isLoading = false;
   final ProductController _controller = Get.find();
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
   final _unitTypeController = TextEditingController();
+  final _numberOfUnitsController = TextEditingController();
 
   final _sizeWidth = TextEditingController();
   final _sizeHeight = TextEditingController();
@@ -38,6 +40,7 @@ class _EditProductPageState extends State<EditProductPage> {
     _nameController.text = widget.product.name;
     _priceController.text = widget.product.pricePerQuantity.toString();
     _unitTypeController.text = widget.product.unitType ?? '';
+    _numberOfUnitsController.text = (widget.product.quantity ?? 0).toString();
 
     _colorController.text = widget.product.color ?? '';
     _materialController.text = widget.product.material ?? '';
@@ -57,6 +60,22 @@ class _EditProductPageState extends State<EditProductPage> {
         }
       }
     }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _priceController.dispose();
+    _unitTypeController.dispose();
+    _numberOfUnitsController.dispose();
+    _sizeWidth.dispose();
+    _sizeHeight.dispose();
+    _sizeUnitController.dispose();
+    _colorController.dispose();
+    _materialController.dispose();
+    _weightController.dispose();
+    _rentPriceController.dispose();
+    super.dispose();
   }
 
   @override
@@ -113,6 +132,13 @@ class _EditProductPageState extends State<EditProductPage> {
               TextField(
                 controller: _nameController,
                 decoration: InputDecoration(labelText: 'name'.tr),
+              ),
+
+              // Number of units field
+              TextField(
+                controller: _numberOfUnitsController,
+                decoration: InputDecoration(labelText: 'number_of_units'.tr),
+                keyboardType: TextInputType.number,
               ),
 
               // Unit type dropdown
@@ -203,11 +229,13 @@ class _EditProductPageState extends State<EditProductPage> {
               ),
 
               SizedBox(height: 20),
-              ElevatedButton.icon(
-                icon: Icon(Icons.save),
-                label: Text('save_changes'.tr),
-                onPressed: _updateProduct,
-              ),
+              _isLoading
+                ? Center(child: CircularProgressIndicator())
+                : ElevatedButton.icon(
+                    icon: Icon(Icons.save),
+                    label: Text('save_changes'.tr),
+                    onPressed: _updateProduct,
+                  ),
             ],
           ),
         ),
@@ -231,10 +259,16 @@ class _EditProductPageState extends State<EditProductPage> {
       return;
     }
 
+    // Show loading indicator
+    setState(() {
+      _isLoading = true;
+    });
+
     try {
       // Create updated product
       final updatedProduct = widget.product.copyWith(
         name: _nameController.text,
+        quantity: int.tryParse(_numberOfUnitsController.text) ?? widget.product.quantity,
         pricePerQuantity: double.tryParse(_priceController.text) ?? widget.product.pricePerQuantity,
         photo: _photoPath,
         unitType: _unitTypeController.text.isEmpty ? null : _unitTypeController.text,
@@ -256,6 +290,13 @@ class _EditProductPageState extends State<EditProductPage> {
       Get.back();
     } catch (e) {
       ToastUtil.showError('update_failed'.tr + ': $e');
+    } finally {
+      // Hide loading indicator if we're still on this screen
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 }

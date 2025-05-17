@@ -96,7 +96,7 @@ class ReturnHistoryPage extends StatelessWidget {
                     leading: Icon(Icons.assignment_return, color: Colors.teal),
                     title: Text(history.productName),
                     subtitle: Text(
-                        'Barcode: ${history.barcode}\nQty: ${history.quantity}, By: ${history.givenTo}, Agency: ${history.agency ?? 'N/A'}, Notes: ${history.notes ?? 'N/A'}'),
+                        'Barcode: ${history.barcode}\nUnits: ${history.quantity}, By: ${history.givenTo}, Agency: ${history.agency ?? 'N/A'}, Notes: ${history.notes ?? 'N/A'}'),
                     trailing: Text(history.createdAt.toString().substring(0, 16)),
                   ),
                 );
@@ -113,7 +113,7 @@ class ReturnHistoryPage extends StatelessWidget {
                     children: items.map((item) => ListTile(
                       contentPadding: EdgeInsets.only(left: 32.0, right: 16.0),
                       title: Text(item.productName),
-                      subtitle: Text('Barcode: ${item.barcode}, Qty: ${item.quantity}'),
+                      subtitle: Text('Barcode: ${item.barcode}, Units: ${item.quantity}'),
                     )).toList(),
                   ),
                 );
