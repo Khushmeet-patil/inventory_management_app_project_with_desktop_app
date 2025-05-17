@@ -54,7 +54,8 @@ dependencies:
   camera_platform_interface: ^2.10.0
   camera: ^0.11.1
   file_selector: ^1.0.3
-  # The following adds the Firebase Core and Analytics libraries
+  flutter_cache_manager:
+  flutter_image_compress: ^2.1.0
 
 dev_dependencies:
   flutter_test:

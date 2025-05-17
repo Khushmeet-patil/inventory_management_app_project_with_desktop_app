@@ -115,21 +115,41 @@ class _ReturnPageState extends State<ReturnPage> {
       return;
     }
 
-    // Generate a single transaction ID for all products in this return
-    final String transactionId = const Uuid().v4();
-    print('Generated transaction ID for return: $transactionId');
+    // Show loading indicator
+    final loadingDialog = showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 20),
+              Text('processing_return'.tr),
+            ],
+          ),
+        );
+      },
+    );
 
-    for (var item in _returnList) {
-      await _controller.returnProduct(
-        item['barcode'],
-        item['quantity'],
+    try {
+      // Use the optimized batch return method for better performance
+      await _controller.batchReturnProducts(
+        _returnList,
         _personController.text,
         agency: _agencyController.text.isNotEmpty ? _agencyController.text : null,
-        notes: item['notes'].isNotEmpty ? item['notes'] : null,
-        transactionId: transactionId,
       );
+
+      // Close loading dialog
+      Navigator.of(context).pop();
+
+      // Return to previous screen
+      Get.back();
+    } catch (e) {
+      // Close loading dialog on error
+      Navigator.of(context).pop();
+      print('Error in batch return: $e');
     }
-    Get.back();
   }
 
   @override

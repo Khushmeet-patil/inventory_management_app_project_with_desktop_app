@@ -126,6 +126,8 @@ final Map<String, String> enTranslations = {
   // Common
   'server': 'Server',
   'client': 'Client',
+  'processing_rental': 'Processing rental...',
+  'processing_return': 'Processing return...',
 
   // Edit Product
   'edit_product': 'Edit Product',

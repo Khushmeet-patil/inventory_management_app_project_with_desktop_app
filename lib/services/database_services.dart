@@ -515,26 +515,84 @@ class DatabaseService {
   // Enhanced history methods for sync
 
   Future<void> addHistoryWithSync(ProductHistory history) async {
-    final syncId = const Uuid().v4();
-    final now = DateTime.now();
+    try {
+      final syncId = const Uuid().v4();
+      final now = DateTime.now();
 
-    final historyWithSync = history.copyWith(
-      syncId: syncId,
-      lastSynced: now,
-    );
-
-    // Use transaction for better performance
-    final db = await database;
-    await db.transaction((txn) async {
-      // Add history
-      await txn.insert('product_history', historyWithSync.toMap());
-
-      // Add to sync queue
-      await txn.insert(
-        'sync_queue',
-        SyncItem.fromHistory(historyWithSync, SyncOperation.add).toMap(),
-        conflictAlgorithm: ConflictAlgorithm.replace,
+      final historyWithSync = history.copyWith(
+        syncId: syncId,
+        lastSynced: now,
       );
-    });
+
+      // Use transaction for better performance
+      final db = await database;
+      await db.transaction((txn) async {
+        final batch = txn.batch();
+
+        // Add history
+        batch.insert(
+          'product_history',
+          historyWithSync.toMap(includeId: false),
+          conflictAlgorithm: ConflictAlgorithm.replace
+        );
+
+        // Add to sync queue
+        batch.insert(
+          'sync_queue',
+          SyncItem.fromHistory(historyWithSync, SyncOperation.add).toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+
+        // Commit batch operation (faster than individual operations)
+        await batch.commit(noResult: true);
+      });
+    } catch (e) {
+      print('Error in addHistoryWithSync: $e');
+      rethrow;
+    }
+  }
+
+  /// Process multiple product rentals in a single transaction
+  Future<void> batchRentProducts(
+    List<Map<String, dynamic>> rentItems,
+    String givenTo,
+    String? agency,
+    String transactionId,
+  ) async {
+    try {
+      final db = await database;
+      await DatabaseBatchUtil.batchRentProducts(
+        db,
+        rentItems,
+        givenTo,
+        agency,
+        transactionId,
+      );
+    } catch (e) {
+      print('Error batch renting products: $e');
+      rethrow;
+    }
+  }
+
+  /// Process multiple product returns in a single transaction
+  Future<void> batchReturnProducts(
+    List<Map<String, dynamic>> returnItems,
+    String returnedBy,
+    String? agency,
+    String transactionId,
+  ) async {
+    try {
+      final db = await database;
+      await DatabaseBatchUtil.batchReturnProducts(
+        db,
+        returnItems,
+        returnedBy,
+        agency,
+        transactionId,
+      );
+    } catch (e) {
+      print('Error batch returning products: $e');
+      rethrow;
+    }
   }
 }

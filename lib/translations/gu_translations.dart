@@ -115,6 +115,8 @@ final Map<String, String> guTranslations = {
   // Common
   'server': 'સર્વર',
   'client': 'ક્લાયન્ટ',
+  'processing_rental': 'ભાડાની પ્રક્રિયા ચાલુ છે...',
+  'processing_return': 'પરત પ્રક્રિયા ચાલુ છે...',
 
   // Edit Product
   'edit_product': 'ઉત્પાદન સંપાદિત કરો',

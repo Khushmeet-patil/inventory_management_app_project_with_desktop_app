@@ -116,21 +116,41 @@ class _RentPageState extends State<RentPage> {
       return;
     }
 
-    // Generate a single transaction ID for all products in this rental
-    final String transactionId = const Uuid().v4();
-    print('Generated transaction ID for rental: $transactionId');
+    // Show loading indicator
+    final loadingDialog = showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 20),
+              Text('processing_rental'.tr),
+            ],
+          ),
+        );
+      },
+    );
 
-    for (var item in _rentList) {
-      await _controller.rentProduct(
-        item['barcode'],
-        item['quantity'],
+    try {
+      // Use the optimized batch rent method for better performance
+      await _controller.batchRentProducts(
+        _rentList,
         _personController.text,
-        item['rentalDays'],
         agency: _agencyController.text.isNotEmpty ? _agencyController.text : null,
-        transactionId: transactionId,
       );
+
+      // Close loading dialog
+      Navigator.of(context).pop();
+
+      // Return to previous screen
+      Get.back();
+    } catch (e) {
+      // Close loading dialog on error
+      Navigator.of(context).pop();
+      print('Error in batch rent: $e');
     }
-    Get.back();
   }
 
   @override

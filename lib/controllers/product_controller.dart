@@ -1,4 +1,5 @@
 import 'package:get/get.dart';
+import 'package:uuid/uuid.dart';
 import '../models/product_model.dart';
 import '../models/history_model.dart';
 import '../services/database_services.dart';
@@ -198,33 +199,31 @@ class ProductController extends GetxController {
 
         // Check if we have enough stock
         if ((product.quantity ?? 0) >= quantity) {
-          // Update the product
-          final updatedProduct = product.copyWith(
-            quantity: (product.quantity ?? 0) - quantity,
-            updatedAt: DateTime.now(),
+          // Create a single item list for the batch operation
+          final rentItems = [
+            {
+              'barcode': barcode,
+              'quantity': quantity,
+              'rentalDays': rentalDays,
+            }
+          ];
+
+          // Use the batch operation for better performance
+          await _dbService.batchRentProducts(
+            rentItems,
+            givenTo,
+            agency,
+            transactionId ?? const Uuid().v4(),
           );
-          await _dbService.updateProductWithSync(updatedProduct);
-          print('Product updated, new quantity: ${updatedProduct.quantity ?? 0}');
 
-          // Add history entry
-          await _dbService.addHistoryWithSync(ProductHistory(
-            id: 0,
-            productId: product.id,
-            productName: product.name,
-            barcode: product.barcode,
-            quantity: quantity,
-            type: HistoryType.rental,
-            givenTo: givenTo,
-            agency: agency,
-            rentedDate: DateTime.now(),
-            rentalDays: rentalDays,
-            createdAt: DateTime.now(),
-            transactionId: transactionId,
-          ));
-          print('Rental history entry added');
+          // Reload data without waiting for sync to complete
+          loadData();
 
-          // Sync with server and reload data
-          await syncAndReload();
+          // Trigger sync in the background
+          _syncService.syncImmediately().catchError((e) {
+            print('Background sync error: $e');
+            // Ignore sync errors to keep UI responsive
+          });
 
           // Show success message
           try {
@@ -258,6 +257,48 @@ class ProductController extends GetxController {
     }
   }
 
+  /// Rent multiple products in a single batch operation for better performance
+  Future<void> batchRentProducts(List<Map<String, dynamic>> rentItems, String givenTo, {String? agency}) async {
+    try {
+      if (rentItems.isEmpty) {
+        print('No products to rent');
+        return;
+      }
+
+      if (givenTo.isEmpty) {
+        ToastUtil.showError('Recipient name cannot be empty');
+        return;
+      }
+
+      // Generate a single transaction ID for all products in this batch
+      final String transactionId = const Uuid().v4();
+      print('Generated transaction ID for batch rental: $transactionId');
+
+      // Use the batch operation for better performance
+      await _dbService.batchRentProducts(
+        rentItems,
+        givenTo,
+        agency,
+        transactionId,
+      );
+
+      // Reload data without waiting for sync to complete
+      loadData();
+
+      // Trigger sync in the background
+      _syncService.syncImmediately().catchError((e) {
+        print('Background sync error: $e');
+        // Ignore sync errors to keep UI responsive
+      });
+
+      // Show success message
+      ToastUtil.showSuccess('Products rented successfully');
+    } catch (e) {
+      print('Error batch renting products: $e');
+      ToastUtil.showError('Failed to rent products: $e');
+    }
+  }
+
   Future<void> returnProduct(String barcode, int quantity, String returnedBy, {String? agency, String? notes, String? transactionId}) async {
     try {
       print('Returning product with barcode: $barcode, quantity: $quantity, by: $returnedBy');
@@ -283,34 +324,31 @@ class ProductController extends GetxController {
       if (product != null) {
         print('Found product: ${product.name}, current quantity: ${product.quantity ?? 0}');
 
-        // Update the product
-        final updatedProduct = product.copyWith(
-          quantity: (product.quantity ?? 0) + quantity,
-          updatedAt: DateTime.now(),
+        // Create a single item list for the batch operation
+        final returnItems = [
+          {
+            'barcode': barcode,
+            'quantity': quantity,
+            'notes': notes ?? '',
+          }
+        ];
+
+        // Use the batch operation for better performance
+        await _dbService.batchReturnProducts(
+          returnItems,
+          returnedBy,
+          agency,
+          transactionId ?? const Uuid().v4(),
         );
-        await _dbService.updateProductWithSync(updatedProduct);
-        print('Product updated, new quantity: ${updatedProduct.quantity ?? 0}');
 
-        // Add history entry
-        await _dbService.addHistoryWithSync(ProductHistory(
-          id: 0,
-          productId: product.id,
-          productName: product.name,
-          barcode: product.barcode,
-          quantity: quantity,
-          type: HistoryType.return_product,
-          givenTo: returnedBy,
-          agency: agency,
-          returnDate: DateTime.now(),
-          notes: notes,
-          createdAt: DateTime.now(),
-          rentedDate: DateTime.now(), // This is required but not really used for returns
-          transactionId: transactionId,
-        ));
-        print('Return history entry added');
+        // Reload data without waiting for sync to complete
+        loadData();
 
-        // Sync with server and reload data
-        await syncAndReload();
+        // Trigger sync in the background
+        _syncService.syncImmediately().catchError((e) {
+          print('Background sync error: $e');
+          // Ignore sync errors to keep UI responsive
+        });
 
         // Show success message
         try {
@@ -333,6 +371,48 @@ class ProductController extends GetxController {
       } catch (toastError) {
         print('Error showing toast: $toastError');
       }
+    }
+  }
+
+  /// Return multiple products in a single batch operation for better performance
+  Future<void> batchReturnProducts(List<Map<String, dynamic>> returnItems, String returnedBy, {String? agency}) async {
+    try {
+      if (returnItems.isEmpty) {
+        print('No products to return');
+        return;
+      }
+
+      if (returnedBy.isEmpty) {
+        ToastUtil.showError('Returned by name cannot be empty');
+        return;
+      }
+
+      // Generate a single transaction ID for all products in this batch
+      final String transactionId = const Uuid().v4();
+      print('Generated transaction ID for batch return: $transactionId');
+
+      // Use the batch operation for better performance
+      await _dbService.batchReturnProducts(
+        returnItems,
+        returnedBy,
+        agency,
+        transactionId,
+      );
+
+      // Reload data without waiting for sync to complete
+      loadData();
+
+      // Trigger sync in the background
+      _syncService.syncImmediately().catchError((e) {
+        print('Background sync error: $e');
+        // Ignore sync errors to keep UI responsive
+      });
+
+      // Show success message
+      ToastUtil.showSuccess('Products returned successfully');
+    } catch (e) {
+      print('Error batch returning products: $e');
+      ToastUtil.showError('Failed to return products: $e');
     }
   }
 

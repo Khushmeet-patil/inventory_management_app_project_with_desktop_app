@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
+import 'package:uuid/uuid.dart';
 import '../models/product_model.dart';
 import '../models/history_model.dart';
 import '../models/sync_model.dart';
@@ -11,14 +12,14 @@ class DatabaseBatchUtil {
   static Future<void> executeBatch(Database db, List<Map<String, dynamic>> operations) async {
     await db.transaction((txn) async {
       final batch = txn.batch();
-      
+
       for (final operation in operations) {
         final String type = operation['type'];
         final String table = operation['table'];
         final dynamic data = operation['data'];
         final String? where = operation['where'];
         final List<dynamic>? whereArgs = operation['whereArgs'];
-        
+
         switch (type) {
           case 'insert':
             batch.insert(table, data, conflictAlgorithm: ConflictAlgorithm.replace);
@@ -33,11 +34,11 @@ class DatabaseBatchUtil {
             throw Exception('Unknown operation type: $type');
         }
       }
-      
+
       await batch.commit(noResult: true);
     });
   }
-  
+
   /// Add a product and its history entry in a single transaction
   static Future<Product> addProductWithHistory(
       Database db,
@@ -81,7 +82,7 @@ class DatabaseBatchUtil {
 
     return addedProduct!;
   }
-  
+
   /// Optimize sync queue by combining similar operations
   static Future<void> optimizeSyncQueue(Database db) async {
     // Get all pending sync items
@@ -91,7 +92,7 @@ class DatabaseBatchUtil {
       whereArgs: [SyncStatus.pending.index],
       orderBy: 'timestamp ASC',
     );
-    
+
     // Group by entity_id and entity_type
     final Map<String, List<Map<String, dynamic>>> groupedItems = {};
     for (final item in pendingItems) {
@@ -101,7 +102,7 @@ class DatabaseBatchUtil {
       }
       groupedItems[key]!.add(item);
     }
-    
+
     // For each group, keep only the latest operation
     final List<String> itemsToDelete = [];
     for (final key in groupedItems.keys) {
@@ -110,14 +111,14 @@ class DatabaseBatchUtil {
         // Sort by timestamp (descending)
         items.sort((a, b) => DateTime.parse(b['timestamp'] as String)
             .compareTo(DateTime.parse(a['timestamp'] as String)));
-        
+
         // Keep the latest item, delete the rest
         for (int i = 1; i < items.length; i++) {
           itemsToDelete.add(items[i]['id'] as String);
         }
       }
     }
-    
+
     // Delete redundant items
     if (itemsToDelete.isNotEmpty) {
       await db.transaction((txn) async {
@@ -130,5 +131,187 @@ class DatabaseBatchUtil {
         }
       });
     }
+  }
+
+  /// Process multiple product rentals in a single transaction for better performance
+  static Future<void> batchRentProducts(
+    Database db,
+    List<Map<String, dynamic>> rentItems,
+    String givenTo,
+    String? agency,
+    String transactionId,
+  ) async {
+    if (rentItems.isEmpty) return;
+
+    await db.transaction((txn) async {
+      final batch = txn.batch();
+      final now = DateTime.now();
+
+      for (final item in rentItems) {
+        final String barcode = item['barcode'];
+        final int quantity = item['quantity'];
+        final int rentalDays = item['rentalDays'];
+
+        // Get product by barcode
+        final List<Map<String, dynamic>> products = await txn.query(
+          'products',
+          where: 'barcode = ?',
+          whereArgs: [barcode],
+        );
+
+        if (products.isEmpty) continue;
+
+        final product = Product.fromMap(products.first);
+
+        // Check if we have enough stock
+        if ((product.quantity ?? 0) < quantity) continue;
+
+        // Update product quantity
+        final updatedProduct = product.copyWith(
+          quantity: (product.quantity ?? 0) - quantity,
+          updatedAt: now,
+          lastSynced: now,
+        );
+
+        // Update product
+        batch.update(
+          'products',
+          updatedProduct.toMap(),
+          where: 'id = ?',
+          whereArgs: [product.id],
+        );
+
+        // Create history entry
+        final history = ProductHistory(
+          id: 0,
+          productId: product.id,
+          productName: product.name,
+          barcode: product.barcode,
+          quantity: quantity,
+          type: HistoryType.rental,
+          givenTo: givenTo,
+          agency: agency,
+          rentedDate: now,
+          rentalDays: rentalDays,
+          createdAt: now,
+          syncId: const Uuid().v4(),
+          lastSynced: now,
+          transactionId: transactionId,
+        );
+
+        // Insert history
+        batch.insert(
+          'product_history',
+          history.toMap(includeId: false),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+
+        // Add to sync queue
+        batch.insert(
+          'sync_queue',
+          SyncItem.fromProduct(updatedProduct, SyncOperation.update).toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+
+        batch.insert(
+          'sync_queue',
+          SyncItem.fromHistory(history, SyncOperation.add).toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+
+      // Execute all operations at once
+      await batch.commit(noResult: true);
+    });
+  }
+
+  /// Process multiple product returns in a single transaction for better performance
+  static Future<void> batchReturnProducts(
+    Database db,
+    List<Map<String, dynamic>> returnItems,
+    String returnedBy,
+    String? agency,
+    String transactionId,
+  ) async {
+    if (returnItems.isEmpty) return;
+
+    await db.transaction((txn) async {
+      final batch = txn.batch();
+      final now = DateTime.now();
+
+      for (final item in returnItems) {
+        final String barcode = item['barcode'];
+        final int quantity = item['quantity'];
+        final String? notes = item['notes'];
+
+        // Get product by barcode
+        final List<Map<String, dynamic>> products = await txn.query(
+          'products',
+          where: 'barcode = ?',
+          whereArgs: [barcode],
+        );
+
+        if (products.isEmpty) continue;
+
+        final product = Product.fromMap(products.first);
+
+        // Update product quantity
+        final updatedProduct = product.copyWith(
+          quantity: (product.quantity ?? 0) + quantity,
+          updatedAt: now,
+          lastSynced: now,
+        );
+
+        // Update product
+        batch.update(
+          'products',
+          updatedProduct.toMap(),
+          where: 'id = ?',
+          whereArgs: [product.id],
+        );
+
+        // Create history entry
+        final history = ProductHistory(
+          id: 0,
+          productId: product.id,
+          productName: product.name,
+          barcode: product.barcode,
+          quantity: quantity,
+          type: HistoryType.return_product,
+          givenTo: returnedBy,
+          agency: agency,
+          rentedDate: now, // Required but not used for returns
+          returnDate: now,
+          notes: notes,
+          createdAt: now,
+          syncId: const Uuid().v4(),
+          lastSynced: now,
+          transactionId: transactionId,
+        );
+
+        // Insert history
+        batch.insert(
+          'product_history',
+          history.toMap(includeId: false),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+
+        // Add to sync queue
+        batch.insert(
+          'sync_queue',
+          SyncItem.fromProduct(updatedProduct, SyncOperation.update).toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+
+        batch.insert(
+          'sync_queue',
+          SyncItem.fromHistory(history, SyncOperation.add).toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+
+      // Execute all operations at once
+      await batch.commit(noResult: true);
+    });
   }
 }
