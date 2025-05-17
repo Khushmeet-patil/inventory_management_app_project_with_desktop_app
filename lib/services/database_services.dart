@@ -638,6 +638,18 @@ class DatabaseService {
 
   Future<void> updateProductWithSync(Product product) async {
     try {
+      print('Starting updateProductWithSync for product: ID=${product.id}, Name=${product.name}');
+
+      // Normalize photo path for Windows if needed
+      String? normalizedPhotoPath = product.photo;
+      if (normalizedPhotoPath != null && Platform.isWindows) {
+        normalizedPhotoPath = normalizedPhotoPath.replaceAll('\\', '/');
+        print('Normalized photo path: $normalizedPhotoPath');
+
+        // Create a copy of the product with the normalized photo path
+        product = product.copyWith(photo: normalizedPhotoPath);
+      }
+
       final now = DateTime.now();
       final updatedProduct = product.copyWith(
         lastSynced: now,
@@ -645,34 +657,84 @@ class DatabaseService {
         syncId: product.syncId ?? const Uuid().v4(),
       );
 
+      print('Product prepared for update: ID=${updatedProduct.id}, Name=${updatedProduct.name}');
+
       // Use optimized batch operation for better performance
       print('Optimizing product update with batch operation');
       final db = await database;
-      await db.transaction((txn) async {
-        final batch = txn.batch();
 
-        // Update product
-        batch.update(
+      // For desktop platforms, use a more reliable approach with individual operations
+      if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+        print('Using desktop-specific update approach');
+
+        // First update the product
+        print('Updating product in database');
+        final result = await db.update(
           'products',
           updatedProduct.toMap(),
           where: 'id = ?',
           whereArgs: [updatedProduct.id],
         );
 
-        // Add to sync queue
-        batch.insert(
+        if (result == 0) {
+          // No rows were updated, try updating by barcode instead
+          print('No product updated by ID, trying by barcode');
+          final barcodeResult = await db.update(
+            'products',
+            updatedProduct.toMap(includeId: false),
+            where: 'barcode = ?',
+            whereArgs: [updatedProduct.barcode],
+          );
+
+          if (barcodeResult == 0) {
+            print('Warning: Could not update product, no matching ID or barcode');
+            throw Exception('Product not found with ID ${updatedProduct.id} or barcode ${updatedProduct.barcode}');
+          } else {
+            print('Updated product by barcode: ${updatedProduct.barcode}');
+          }
+        } else {
+          print('Updated product by ID: ${updatedProduct.id}');
+        }
+
+        // Then add to sync queue
+        print('Adding to sync queue');
+        await db.insert(
           'sync_queue',
           SyncItem.fromProduct(updatedProduct, SyncOperation.update).toMap(),
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
 
-        // Commit batch operation (faster than individual operations)
-        print('Committing batch update operation');
-        await batch.commit(noResult: true);
-        print('Batch update completed successfully');
-      });
+        print('Desktop update completed successfully');
+      } else {
+        // For mobile platforms, use the batch operation
+        print('Using batch operation for mobile platform');
+        await db.transaction((txn) async {
+          final batch = txn.batch();
+
+          // Update product
+          batch.update(
+            'products',
+            updatedProduct.toMap(),
+            where: 'id = ?',
+            whereArgs: [updatedProduct.id],
+          );
+
+          // Add to sync queue
+          batch.insert(
+            'sync_queue',
+            SyncItem.fromProduct(updatedProduct, SyncOperation.update).toMap(),
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+
+          // Commit batch operation (faster than individual operations)
+          print('Committing batch update operation');
+          await batch.commit(noResult: true);
+          print('Batch update completed successfully');
+        });
+      }
     } catch (e) {
       print('Error in updateProductWithSync: $e');
+      print('Stack trace: ${StackTrace.current}');
       rethrow;
     }
   }

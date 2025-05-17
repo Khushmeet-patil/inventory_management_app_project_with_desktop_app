@@ -5,6 +5,7 @@ import '../controllers/product_controller.dart';
 import '../services/sync_service.dart';
 import '../utils/image_picker_util.dart';
 import '../models/product_model.dart';
+import '../views/edit_product_page.dart';
 
 class ViewStockPage extends StatefulWidget {
   @override
@@ -122,6 +123,7 @@ class _ViewStockPageState extends State<ViewStockPage> {
                       icon: Icon(Icons.edit),
                       label: Text('Edit'),
                       onPressed: () {
+                        print('Edit button clicked in product details dialog');
                         Navigator.of(context).pop();
                         _editProduct(context, product);
                       },
@@ -142,7 +144,29 @@ class _ViewStockPageState extends State<ViewStockPage> {
   }
 
   void _editProduct(BuildContext context, Product product) {
-    Get.toNamed('/edit-product', arguments: product);
+    print('Editing product: ID=${product.id}, Name=${product.name}');
+    try {
+      // For desktop platforms, use a more reliable navigation approach
+      if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+        print('Using desktop-specific navigation');
+        // First create the page with the product
+        final page = EditProductPage(product: product);
+        // Then navigate to it using Navigator instead of GetX
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (context) => page),
+        );
+      } else {
+        // For mobile, continue using GetX routing
+        print('Using GetX navigation for mobile');
+        Get.toNamed('/edit-product', arguments: product);
+      }
+    } catch (e) {
+      print('Error navigating to edit product page: $e');
+      // Fallback to direct navigation if GetX fails
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (context) => EditProductPage(product: product)),
+      );
+    }
   }
 
   Widget _detailRow(String label, String value) {
@@ -267,7 +291,10 @@ class _ViewStockPageState extends State<ViewStockPage> {
                           // Edit button
                           IconButton(
                             icon: Icon(Icons.edit, color: Colors.teal),
-                            onPressed: () => _editProduct(context, product),
+                            onPressed: () {
+                              print('Edit icon clicked in product list');
+                              _editProduct(context, product);
+                            },
                             tooltip: 'edit_product'.tr,
                           ),
                         ],
