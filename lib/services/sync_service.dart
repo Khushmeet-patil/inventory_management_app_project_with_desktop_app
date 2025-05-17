@@ -85,11 +85,34 @@ class SyncService {
     print('Starting sync process');
 
     try {
-      // Only do full device discovery on first sync or if last sync was a while ago
+      // Use a more aggressive caching strategy for faster reconnection
       final bool needsFullDiscovery = _isFirstSync ||
           (_lastSuccessfulSync == null ||
-           DateTime.now().difference(_lastSuccessfulSync!).inMinutes > 5);
+           DateTime.now().difference(_lastSuccessfulSync!).inMinutes > 10); // Increased from 5 to 10 minutes
 
+      // Try to use cached server information first for faster connection
+      if (!needsFullDiscovery && _networkService.isConnectedToServer.value) {
+        final serverIp = _networkService.connectedServerIp.value;
+        if (serverIp.isNotEmpty) {
+          print('Using cached server connection: $serverIp');
+
+          // Try to sync with the cached server first
+          final cachedServerSync = await _syncWithCachedServer();
+          if (cachedServerSync) {
+            // Successfully synced with cached server, we're done
+            print('Successfully synced with cached server');
+            syncStatus.value = 'Synced successfully';
+            isSyncing.value = false;
+            _updatePendingSyncCount();
+            return;
+          }
+
+          // If cached server sync failed, fall back to full discovery
+          print('Cached server sync failed, falling back to discovery');
+        }
+      }
+
+      // Perform device discovery if needed
       if (needsFullDiscovery) {
         try {
           print('Performing full device discovery...');
@@ -100,7 +123,15 @@ class SyncService {
           // Continue anyway
         }
       } else {
-        print('Skipping full discovery, using cached server information');
+        // Do a quick discovery without scanning the entire network
+        try {
+          print('Performing quick device discovery...');
+          // This will check recent connections and common IPs only
+          await _networkService.discoverDevices();
+        } catch (e) {
+          print('Error in quick discovery: $e');
+          // Continue anyway
+        }
       }
 
       // Find server devices
@@ -145,60 +176,56 @@ class SyncService {
       if (servers.isNotEmpty) {
         print('Trying to sync with ${servers.length} servers in parallel');
 
-        // Create a list of futures for parallel execution
-        final List<Future<Map<String, dynamic>>> syncFutures = servers.map((server) async {
-          try {
-            // Skip ping and try to send data directly
-            print('Attempting to sync with server: ${server.name} (${server.ipAddress})');
-            final success = await _networkService.sendSyncBatch(server, testBatch);
+        // Create a completer to handle the first successful connection
+        final completer = Completer<Map<String, dynamic>>();
 
-            return {
-              'server': server,
-              'success': success,
-              'error': success ? null : 'Failed to connect'
-            };
-          } catch (e) {
-            print('Error syncing with server ${server.ipAddress}: $e');
-            return {
-              'server': server,
+        // Set up a timeout for all sync attempts
+        final timeout = Timer(Duration(seconds: 5), () {
+          if (!completer.isCompleted) {
+            completer.complete({
               'success': false,
-              'error': 'Error: $e'
-            };
+              'error': 'Timeout waiting for server response'
+            });
           }
-        }).toList();
+        });
 
-        // Wait for the first successful connection or all to complete
-        final results = await Future.wait(syncFutures);
-
-        // Find the first successful connection
-        for (final result in results) {
-          if (result['success'] == true) {
-            syncSuccess = true;
-            successfulServer = result['server'] as DeviceInfo;
-
-            // If we have pending items, update their status
-            if (pendingItems.isNotEmpty) {
-              for (final item in pendingItems) {
-                await _dbService.updateSyncItemStatus(item.id, SyncStatus.completed);
-              }
-              syncStatus.value = 'Synced successfully';
-            } else {
-              syncStatus.value = 'Connected to server';
+        // Try all servers in parallel
+        for (final server in servers) {
+          _trySyncWithServer(server, testBatch).then((result) {
+            // If this is the first successful connection, complete the completer
+            if (result['success'] == true && !completer.isCompleted) {
+              timeout.cancel();
+              completer.complete(result);
             }
+          }).catchError((e) {
+            // Ignore individual errors, we'll handle the overall result
+          });
+        }
 
-            // Update last successful sync time
-            _lastSuccessfulSync = DateTime.now();
+        // Wait for the first successful connection or timeout
+        final result = await completer.future;
 
-            // Request all products from server to ensure we have the latest data
-            await _requestLatestDataFromServer(successfulServer);
+        if (result['success'] == true) {
+          syncSuccess = true;
+          successfulServer = result['server'] as DeviceInfo;
 
-            break; // Exit the loop once we find a successful connection
+          // If we have pending items, update their status
+          if (pendingItems.isNotEmpty) {
+            for (final item in pendingItems) {
+              await _dbService.updateSyncItemStatus(item.id, SyncStatus.completed);
+            }
+            syncStatus.value = 'Synced successfully';
           } else {
-            // Collect error message from the first failure if we don't have one yet
-            if (errorMessage.isEmpty) {
-              errorMessage = result['error'] as String? ?? 'Unknown error';
-            }
+            syncStatus.value = 'Connected to server';
           }
+
+          // Update last successful sync time
+          _lastSuccessfulSync = DateTime.now();
+
+          // Request all products from server to ensure we have the latest data
+          await _requestLatestDataFromServer(successfulServer);
+        } else {
+          errorMessage = result['error'] as String? ?? 'Unknown error';
         }
       }
 
@@ -224,6 +251,87 @@ class SyncService {
     } finally {
       isSyncing.value = false;
       _updatePendingSyncCount();
+    }
+  }
+
+  // Try to sync with a cached server connection
+  Future<bool> _syncWithCachedServer() async {
+    try {
+      final serverIp = _networkService.connectedServerIp.value;
+      if (serverIp.isEmpty) return false;
+
+      print('Attempting to sync with cached server at $serverIp');
+
+      // Get pending sync items
+      final pendingItems = await _dbService.getPendingSyncItems();
+
+      // Create a test batch
+      final testBatch = SyncBatch(
+        id: const Uuid().v4(),
+        deviceId: _networkService.deviceId,
+        items: pendingItems.isEmpty ? [] : pendingItems,
+        timestamp: DateTime.now(),
+      );
+
+      // Find the server in known devices
+      final servers = await _networkService.getServerDevices();
+      final cachedServer = servers.firstWhere(
+        (server) => server.ipAddress == serverIp,
+        orElse: () => DeviceInfo(
+          id: 'cached-server',
+          name: _networkService.connectedServerName.value,
+          ipAddress: serverIp,
+          port: _networkService.serverPort,
+          role: DeviceRole.server,
+          lastSeen: DateTime.now(),
+        ),
+      );
+
+      // Try to send the batch
+      final success = await _networkService.sendSyncBatch(cachedServer, testBatch);
+
+      if (success) {
+        // If we have pending items, update their status
+        if (pendingItems.isNotEmpty) {
+          for (final item in pendingItems) {
+            await _dbService.updateSyncItemStatus(item.id, SyncStatus.completed);
+          }
+        }
+
+        // Update last successful sync time
+        _lastSuccessfulSync = DateTime.now();
+
+        // Request all products from server
+        await _requestLatestDataFromServer(cachedServer);
+
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      print('Error syncing with cached server: $e');
+      return false;
+    }
+  }
+
+  // Try to sync with a specific server
+  Future<Map<String, dynamic>> _trySyncWithServer(DeviceInfo server, SyncBatch batch) async {
+    try {
+      print('Attempting to sync with server: ${server.name} (${server.ipAddress})');
+      final success = await _networkService.sendSyncBatch(server, batch);
+
+      return {
+        'server': server,
+        'success': success,
+        'error': success ? null : 'Failed to connect'
+      };
+    } catch (e) {
+      print('Error syncing with server ${server.ipAddress}: $e');
+      return {
+        'server': server,
+        'success': false,
+        'error': 'Error: $e'
+      };
     }
   }
 
@@ -340,10 +448,43 @@ class SyncService {
               print('Adding new product: ${product.name}');
               await _dbService.addProduct(product);
             } else {
-              // Update existing product with ALL relevant fields
+              // IMPORTANT: Preserve and merge quantities instead of overwriting
+              // This ensures we don't lose data when syncing from clients to server
+              final int existingQuantity = existingProduct.quantity ?? 0;
+              final int incomingQuantity = product.quantity ?? 0;
+
+              // If we're a server, we need to be careful about quantity updates
+              int finalQuantity;
+              if (_networkService.deviceRole == DeviceRole.server) {
+                // On server: If incoming quantity is different, add the difference
+                // This assumes the client is reporting a quantity change (like adding stock)
+                if (incomingQuantity != existingQuantity) {
+                  // Calculate the difference between incoming and what the client likely had before
+                  // This is a heuristic approach - we assume the client is reporting a delta
+                  final int quantityDifference = incomingQuantity - existingQuantity;
+                  if (quantityDifference > 0) {
+                    // If positive, it's likely new stock being added
+                    finalQuantity = existingQuantity + quantityDifference;
+                    print('Server detected quantity increase: +$quantityDifference units');
+                  } else {
+                    // If negative, it could be a rental or return - we keep our quantity
+                    // as server data is considered authoritative
+                    finalQuantity = existingQuantity;
+                    print('Server ignoring quantity decrease to preserve data');
+                  }
+                } else {
+                  // No quantity change, keep existing
+                  finalQuantity = existingQuantity;
+                }
+              } else {
+                // On client: Always take the server's quantity as authoritative
+                finalQuantity = incomingQuantity;
+              }
+
+              // Update existing product with merged data
               final updatedProduct = existingProduct.copyWith(
                 name: product.name,
-                quantity: product.quantity,
+                quantity: finalQuantity, // Use our calculated quantity
                 pricePerQuantity: product.pricePerQuantity,
                 photo: product.photo,
                 unitType: product.unitType,

@@ -56,16 +56,33 @@ class SettingsController extends GetxController {
     print('Auto-initializing network service...');
     await initialize();
 
-    // If we're a client, automatically discover servers
+    // If we're a client, automatically discover servers with more aggressive settings
     if (!isServer.value) {
-      print('Auto-discovering servers...');
-      await discoverDevices();
+      print('Auto-discovering servers with aggressive settings...');
 
-      // If we found servers, try to sync
-      if (discoveredDevices.any((device) => device.role == DeviceRole.server)) {
-        print('Servers found, initiating sync...');
-        await syncNow();
-        ToastUtil.showInfo('Connected to server');
+      // Try multiple discovery attempts with short delays between them
+      bool serverFound = false;
+      for (int i = 0; i < 3 && !serverFound; i++) {
+        await discoverDevices();
+
+        // Check if we found any servers
+        if (discoveredDevices.any((device) => device.role == DeviceRole.server)) {
+          serverFound = true;
+          print('Servers found, initiating sync...');
+          await syncNow();
+          ToastUtil.showInfo('Connected to server');
+          break;
+        }
+
+        // Short delay before trying again
+        if (i < 2 && !serverFound) {
+          await Future.delayed(Duration(milliseconds: 500));
+        }
+      }
+
+      // If no server was found after multiple attempts, show a message
+      if (!serverFound) {
+        ToastUtil.showInfo('No server found. Will keep searching in background.');
       }
     } else {
       ToastUtil.showInfo('Server initialized');
@@ -101,12 +118,21 @@ class SettingsController extends GetxController {
     isDiscovering.value = true;
 
     try {
+      // Use more aggressive discovery for faster server finding
       final devices = await _networkService.discoverDevices();
       discoveredDevices.value = devices;
 
       // Save discovered devices to database
       for (final device in devices) {
         await _dbService.saveDevice(device);
+      }
+
+      // Update connection status based on discovered devices
+      final connectedToServer = _networkService.isConnectedToServer.value;
+      final serverName = _networkService.connectedServerName.value;
+
+      if (connectedToServer && serverName.isNotEmpty) {
+        print('Connected to server: $serverName');
       }
     } finally {
       isDiscovering.value = false;

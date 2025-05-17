@@ -1,11 +1,12 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 import '../controllers/product_controller.dart';
 import '../models/product_model.dart';
 import '../utils/toast_util.dart';
 import '../utils/image_picker_util.dart';
+import '../utils/barcode_scanner_util.dart';
 
 class AddProductPage extends StatefulWidget {
   @override
@@ -224,23 +225,13 @@ class _AddProductPageState extends State<AddProductPage> {
     );
   }
 
-  void _scanBarcode() {
-    Get.dialog(
-      Dialog(
-        child: Container(
-          height: 300,
-          child: MobileScanner(
-            onDetect: (capture) {
-              final barcode = capture.barcodes.first.rawValue;
-              if (barcode != null) {
-                _barcodeController.text = barcode;
-                Get.back();
-              }
-            },
-          ),
-        ),
-      ),
-    );
+  void _scanBarcode() async {
+    final barcode = await BarcodeScannerUtil.scanBarcode(context);
+    if (barcode != null) {
+      setState(() {
+        _barcodeController.text = barcode;
+      });
+    }
   }
 
   void _pickImage() async {
@@ -253,51 +244,166 @@ class _AddProductPageState extends State<AddProductPage> {
   }
 
   void _submit() async {
+    print('Submit button pressed');
     if (_barcodeController.text.isEmpty) {
+      print('Error: Barcode is empty');
       try {
         ToastUtil.showError('fill_required_fields'.tr);
       } catch (e) {
         print('Error showing toast: $e');
+        // Fallback message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Barcode cannot be empty')),
+        );
       }
       return;
     }
 
-    if (_isExisting) {
-      // Get number of units from the controller, default to 1 if empty
-      final units = int.tryParse(_numberOfUnitsController.text) ?? 1;
-      await _controller.addExistingStock(_barcodeController.text, units);
-    } else {
-      if (_nameController.text.isEmpty || _priceController.text.isEmpty) {
-        try {
-          ToastUtil.showError('fill_all_fields_new_product'.tr);
-        } catch (e) {
-          print('Error showing toast: $e');
+    // Show loading indicator
+    final loadingDialog = showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 20),
+              Text(_isExisting ? 'adding_stock'.tr : 'adding_product'.tr),
+            ],
+          ),
+        );
+      },
+    );
+
+    try {
+      if (_isExisting) {
+        print('Adding existing stock');
+        // Get number of units from the controller, default to 1 if empty
+        final units = int.tryParse(_numberOfUnitsController.text) ?? 1;
+        await _controller.addExistingStock(_barcodeController.text, units);
+      } else {
+        print('Adding new product');
+        if (_nameController.text.isEmpty || _priceController.text.isEmpty) {
+          // Close loading dialog
+          Navigator.of(context).pop();
+          print('Error: Name or price is empty');
+          try {
+            ToastUtil.showError('fill_all_fields_new_product'.tr);
+          } catch (e) {
+            print('Error showing toast: $e');
+            // Fallback message
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Please fill all required fields')),
+            );
+          }
+          return;
         }
-        return;
-      }
       // Get number of units from the controller, default to 1 if empty
       final units = int.tryParse(_numberOfUnitsController.text) ?? 1;
 
-      final product = Product(
-        id: 0,
-        barcode: _barcodeController.text,
-        name: _nameController.text,
-        quantity: units, // Use the number of units as the quantity
-        pricePerQuantity: double.tryParse(_priceController.text) ?? 0.0,
-        photo: _photoPath,
-        unitType: _unitTypeController.text.isEmpty ? null : _unitTypeController.text,
-        size: (_sizeWidth.text.isNotEmpty && _sizeHeight.text.isNotEmpty && _sizeUnitController.text.isNotEmpty)
-            ? '${_sizeWidth.text}x${_sizeHeight.text} ${_sizeUnitController.text}'
-            : null,
-        color: _colorController.text.isEmpty ? null : _colorController.text,
-        material: _materialController.text.isEmpty ? null : _materialController.text,
-        weight: _weightController.text.isEmpty ? null : _weightController.text,
-        rentPrice: double.tryParse(_rentPriceController.text),
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      );
-      await _controller.addNewProduct(product);
+      print('Creating new product object');
+      // Parse price values safely
+      double? pricePerQuantity;
+      try {
+        pricePerQuantity = double.tryParse(_priceController.text);
+        if (pricePerQuantity == null) {
+          print('Warning: Could not parse price: ${_priceController.text}');
+          pricePerQuantity = 0.0;
+        }
+      } catch (e) {
+        print('Error parsing price: $e');
+        pricePerQuantity = 0.0;
+      }
+
+      double? rentPrice;
+      try {
+        rentPrice = _rentPriceController.text.isNotEmpty ?
+            double.tryParse(_rentPriceController.text) : null;
+      } catch (e) {
+        print('Error parsing rent price: $e');
+        rentPrice = null;
+      }
+
+      // Format size string
+      String? sizeStr;
+      if (_sizeWidth.text.isNotEmpty && _sizeHeight.text.isNotEmpty && _sizeUnitController.text.isNotEmpty) {
+        sizeStr = '${_sizeWidth.text}x${_sizeHeight.text} ${_sizeUnitController.text}';
+      }
+
+      try {
+        // Create the product with proper error handling
+        final product = Product(
+          id: 0,
+          barcode: _barcodeController.text,
+          name: _nameController.text,
+          quantity: units, // Use the number of units as the quantity
+          pricePerQuantity: pricePerQuantity,
+          photo: _photoPath,
+          unitType: _unitTypeController.text.isEmpty ? null : _unitTypeController.text,
+          size: sizeStr,
+          color: _colorController.text.isEmpty ? null : _colorController.text,
+          material: _materialController.text.isEmpty ? null : _materialController.text,
+          weight: _weightController.text.isEmpty ? null : _weightController.text,
+          rentPrice: rentPrice,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+
+        print('Product object created successfully: ${product.name}, barcode: ${product.barcode}');
+        print('Calling addNewProduct with product: ${product.toMap()}');
+
+        // Add the product with a timeout to prevent hanging
+        await _controller.addNewProduct(product).timeout(
+          Duration(seconds: 30),
+          onTimeout: () {
+            throw TimeoutException('Adding product timed out after 30 seconds');
+          },
+        );
+
+        print('Product added successfully');
+      } catch (productError) {
+        print('Error creating or adding product: $productError');
+        throw productError; // Re-throw to be caught by the outer try-catch
+      }
     }
+
+    // Close loading dialog
+    Navigator.of(context).pop();
+
+    // Show success message
+    try {
+      ToastUtil.showSuccess(_isExisting ? 'Stock added successfully' : 'Product added successfully');
+    } catch (toastError) {
+      print('Error showing success toast: $toastError');
+      // Fallback success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_isExisting ? 'Stock added successfully' : 'Product added successfully')),
+      );
+    }
+
+    // Return to previous screen
     Get.back();
+    } catch (e) {
+      // Close loading dialog on error
+      try {
+        Navigator.of(context).pop();
+      } catch (navError) {
+        print('Error closing dialog: $navError');
+      }
+
+      print('Error in submit: $e');
+
+      // Show error message
+      try {
+        ToastUtil.showError('Error: ${e.toString()}');
+      } catch (toastError) {
+        print('Error showing error toast: $toastError');
+        // Fallback error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
+      }
+    }
   }
 }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:developer' as developer;
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:network_info_plus/network_info_plus.dart';
@@ -38,12 +39,21 @@ class NetworkService {
   final RxString connectedServerIp = ''.obs;
 
   // Auto-discovery settings
-  final int autoDiscoveryIntervalSeconds = 10; // Reduced from 30 to 10 seconds for faster reconnection
+  final int autoDiscoveryIntervalSeconds = 3; // Reduced from 5 to 3 seconds for faster reconnection
   Timer? _autoDiscoveryTimer;
+
+  // Adaptive discovery interval
+  int _currentDiscoveryInterval = 3; // Start with 3 seconds
+  int _consecutiveFailedDiscoveries = 0;
+  int _consecutiveSuccessfulDiscoveries = 0;
 
   // Connection caching
   final Map<String, DateTime> _lastSuccessfulConnections = {};
-  final Duration _connectionCacheValidity = Duration(minutes: 5);
+  final Duration _connectionCacheValidity = Duration(minutes: 10); // Extended from 5 to 10 minutes
+
+  // UDP broadcast socket for discovery
+  RawDatagramSocket? _udpDiscoverySocket;
+  Timer? _udpBroadcastTimer;
 
   // Callbacks
   Function(SyncBatch)? onSyncBatchReceived;
@@ -96,9 +106,14 @@ class NetworkService {
 
     if (deviceRole == DeviceRole.server) {
       await startServer();
-    } else {
-      // For clients, start auto-discovery timer
+      // Even for server, start a discovery timer to find clients
       _startAutoDiscovery();
+    } else {
+      // For clients, start auto-discovery timer with more aggressive settings
+      _startAutoDiscovery(isClient: true);
+
+      // Immediately try to discover servers
+      _runAutoDiscovery(isClient: true, isInitialDiscovery: true);
     }
   }
 
@@ -110,16 +125,46 @@ class NetworkService {
         type: InternetAddressType.IPv4,
       );
 
-      // Look for a suitable interface (non-loopback, IPv4)
+      // Prioritize interfaces in this order: Wi-Fi, Ethernet, others
+      // Common Wi-Fi interface names
+      final wifiNames = ['wlan', 'wifi', 'wlp', 'wireless', 'en0'];
+      // Common Ethernet interface names
+      final ethernetNames = ['eth', 'ethernet', 'en1', 'eno', 'enp'];
+
+      String? wifiAddress;
+      String? ethernetAddress;
+      String? otherAddress;
+
+      // First pass: categorize interfaces
       for (var interface in interfaces) {
+        final name = interface.name.toLowerCase();
+
         for (var addr in interface.addresses) {
           if (addr.type == InternetAddressType.IPv4 &&
               !addr.isLoopback &&
               addr.address != '0.0.0.0') {
-            return addr.address;
+
+            // Check if this is a private network address (more likely to be useful)
+            final isPrivate = _isLocalNetworkAddress(addr.address);
+            if (!isPrivate) continue;
+
+            // Categorize by interface type
+            if (wifiNames.any((wifiName) => name.contains(wifiName))) {
+              wifiAddress ??= addr.address;
+              print('Found Wi-Fi address: ${addr.address} on ${interface.name}');
+            } else if (ethernetNames.any((ethName) => name.contains(ethName))) {
+              ethernetAddress ??= addr.address;
+              print('Found Ethernet address: ${addr.address} on ${interface.name}');
+            } else {
+              otherAddress ??= addr.address;
+              print('Found other address: ${addr.address} on ${interface.name}');
+            }
           }
         }
       }
+
+      // Return the best address found, prioritizing Wi-Fi > Ethernet > Others
+      return wifiAddress ?? ethernetAddress ?? otherAddress;
     } catch (e) {
       print('Error in alternative IP detection: $e');
     }
@@ -194,9 +239,114 @@ class NetworkService {
       } catch (e) {
         print('Could not list network interfaces: $e');
       }
+
+      // Start UDP discovery listener for faster client discovery
+      _startUdpDiscoveryListener();
+
+      // Broadcast server presence immediately to help clients find it faster
+      _broadcastServerPresence();
+
     } catch (e) {
       print('Failed to start server: $e');
       isServerRunning = false;
+    }
+  }
+
+  // Listen for UDP discovery broadcasts from clients
+  Future<void> _startUdpDiscoveryListener() async {
+    try {
+      // Only servers should listen for discovery broadcasts
+      if (deviceRole != DeviceRole.server) return;
+
+      print('Starting UDP discovery listener on port $serverPort');
+      final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, serverPort);
+
+      socket.listen((RawSocketEvent event) {
+        if (event == RawSocketEvent.read) {
+          final datagram = socket.receive();
+          if (datagram != null) {
+            try {
+              final message = String.fromCharCodes(datagram.data);
+              print('Received UDP message from ${datagram.address.address}: $message');
+
+              try {
+                final data = jsonDecode(message);
+
+                // Handle discovery requests
+                if (data['action'] == 'discovery') {
+                  // This is a discovery request, send a response
+                  final response = jsonEncode({
+                    'id': deviceId,
+                    'name': deviceName,
+                    'role': deviceRole.index,
+                    'port': serverPort,
+                    'last_seen': DateTime.now().toIso8601String(),
+                  });
+
+                  // Send response directly back to the client
+                  socket.send(
+                    utf8.encode(response),
+                    datagram.address,
+                    datagram.port
+                  );
+                  print('Sent UDP response to ${datagram.address.address}:${datagram.port}');
+
+                  // Also add the client to known devices if it's not already there
+                  if (data['id'] != null && data['id'] != deviceId) {
+                    final clientDevice = DeviceInfo(
+                      id: data['id'],
+                      name: data['name'] ?? 'Unknown Client',
+                      ipAddress: datagram.address.address,
+                      port: data['port'] ?? serverPort,
+                      role: DeviceRole.client, // Assume it's a client since it's discovering
+                      lastSeen: DateTime.now(),
+                    );
+
+                    // Add to known devices if not already there
+                    if (!knownDevices.any((d) => d.id == clientDevice.id)) {
+                      knownDevices.add(clientDevice);
+                      print('Added client from UDP discovery: ${clientDevice.name} (${clientDevice.ipAddress})');
+                    }
+                  }
+                }
+                // Handle server announcements
+                else if (data['action'] == 'server_announcement') {
+                  // This is a server announcing its presence
+                  if (data['id'] != null && data['id'] != deviceId) {
+                    final serverDevice = DeviceInfo(
+                      id: data['id'],
+                      name: data['name'] ?? 'Unknown Server',
+                      ipAddress: datagram.address.address,
+                      port: data['port'] ?? serverPort,
+                      role: DeviceRole.server,
+                      lastSeen: DateTime.now(),
+                    );
+
+                    // Process the server device
+                    _processDiscoveredDevice(serverDevice);
+                    print('Received server announcement from: ${serverDevice.name} (${serverDevice.ipAddress})');
+
+                    // If we're a client, update connection status immediately
+                    if (deviceRole == DeviceRole.client) {
+                      isConnectedToServer.value = true;
+                      connectedServerName.value = serverDevice.name;
+                      connectedServerIp.value = serverDevice.ipAddress;
+                    }
+                  }
+                }
+              } catch (e) {
+                print('Error parsing UDP message: $e');
+              }
+            } catch (e) {
+              print('Error processing UDP datagram: $e');
+            }
+          }
+        }
+      });
+
+      print('UDP discovery listener started successfully');
+    } catch (e) {
+      print('Error starting UDP discovery listener: $e');
     }
   }
 
@@ -213,27 +363,100 @@ class NetworkService {
   }
 
   // Start auto-discovery timer for clients
-  void _startAutoDiscovery() {
+  void _startAutoDiscovery({bool isClient = false}) {
     // Cancel any existing timer
     _autoDiscoveryTimer?.cancel();
 
     // Run discovery immediately
-    _runAutoDiscovery();
+    _runAutoDiscovery(isClient: isClient);
 
-    // Then set up periodic discovery
-    _autoDiscoveryTimer = Timer.periodic(
-      Duration(seconds: autoDiscoveryIntervalSeconds),
-      (_) => _runAutoDiscovery(),
+    // Then set up periodic discovery with adaptive interval
+    _scheduleNextDiscovery(isClient: isClient);
+
+    print('Auto-discovery timer started with adaptive interval');
+
+    // For servers, also start a UDP broadcast timer to announce presence
+    if (deviceRole == DeviceRole.server) {
+      _startServerBroadcastTimer();
+    }
+  }
+
+  // Start a timer to periodically broadcast server presence
+  void _startServerBroadcastTimer() {
+    // Cancel any existing timer
+    _udpBroadcastTimer?.cancel();
+
+    // Broadcast every 3 seconds
+    _udpBroadcastTimer = Timer.periodic(
+      Duration(seconds: 3),
+      (_) => _broadcastServerPresence(),
     );
 
-    print('Auto-discovery timer started, will run every $autoDiscoveryIntervalSeconds seconds');
+    print('Server broadcast timer started');
+  }
+
+  // Schedule the next discovery with adaptive interval
+  void _scheduleNextDiscovery({bool isClient = false}) {
+    // Cancel any existing timer
+    _autoDiscoveryTimer?.cancel();
+
+    // Calculate the next interval based on success/failure pattern
+    int nextInterval = _currentDiscoveryInterval;
+
+    // For clients, use more aggressive settings
+    if (isClient) {
+      // If we're connected to a server, use a longer interval
+      if (isConnectedToServer.value) {
+        // Gradually increase the interval up to 20 seconds if we have consistent success
+        if (_consecutiveSuccessfulDiscoveries > 3) {
+          nextInterval = _currentDiscoveryInterval + 3;
+          if (nextInterval > 20) nextInterval = 20; // Cap at 20 seconds for clients
+          _currentDiscoveryInterval = nextInterval;
+        }
+      } else {
+        // If we're not connected, use a shorter interval
+        if (_consecutiveFailedDiscoveries > 1) {
+          // After multiple failures, reduce the interval to find a server faster
+          nextInterval = _currentDiscoveryInterval - 1;
+          if (nextInterval < 2) nextInterval = 2; // Minimum 2 seconds for clients
+          _currentDiscoveryInterval = nextInterval;
+        }
+      }
+    } else {
+      // For servers, use standard settings
+      if (_consecutiveSuccessfulDiscoveries > 3) {
+        nextInterval = _currentDiscoveryInterval + 5;
+        if (nextInterval > 30) nextInterval = 30; // Cap at 30 seconds
+        _currentDiscoveryInterval = nextInterval;
+      } else if (_consecutiveFailedDiscoveries > 2) {
+        nextInterval = _currentDiscoveryInterval - 1;
+        if (nextInterval < 3) nextInterval = 3; // Minimum 3 seconds
+        _currentDiscoveryInterval = nextInterval;
+      }
+    }
+
+    print('Scheduling next discovery in $nextInterval seconds');
+
+    // Schedule the next discovery
+    _autoDiscoveryTimer = Timer(Duration(seconds: nextInterval), () {
+      _runAutoDiscovery(isClient: isClient);
+      // Schedule the next one after this completes
+      _scheduleNextDiscovery(isClient: isClient);
+    });
   }
 
   // Run the auto-discovery process
-  Future<void> _runAutoDiscovery() async {
-    if (deviceRole != DeviceRole.client) return;
+  Future<void> _runAutoDiscovery({bool isClient = false, bool isInitialDiscovery = false}) async {
+    // For servers, only run discovery if explicitly requested
+    if (deviceRole == DeviceRole.server && !isClient) {
+      // For servers, just broadcast presence
+      _broadcastServerPresence();
+      return;
+    }
 
     print('Running auto-discovery...');
+    bool discoverySuccess = false;
+
     try {
       // First check if we're already connected to a server
       if (isConnectedToServer.value) {
@@ -243,21 +466,76 @@ class NetworkService {
           final success = await pingDevice(serverIp, serverPort);
           if (success) {
             print('Still connected to server at $serverIp');
+            _consecutiveSuccessfulDiscoveries++;
+            _consecutiveFailedDiscoveries = 0;
+            discoverySuccess = true;
             return; // We're still connected, no need to discover
           } else {
             print('Lost connection to server at $serverIp, will try to discover new servers');
             isConnectedToServer.value = false;
             connectedServerName.value = '';
             connectedServerIp.value = '';
+            _consecutiveFailedDiscoveries++;
+            _consecutiveSuccessfulDiscoveries = 0;
           }
         }
       }
 
-      // Discover devices
+      // Try UDP broadcast discovery first (fastest method)
+      try {
+        // Use a more aggressive approach for clients or initial discovery
+        if (isClient || isInitialDiscovery) {
+          // Try multiple UDP broadcasts with short delays between them
+          for (int i = 0; i < 3; i++) {
+            await _discoverViaUdpBroadcast();
+
+            // Check if we found any servers through UDP broadcast
+            final serversFromUdp = knownDevices.where((d) => d.role == DeviceRole.server && d.id != deviceId).toList();
+            if (serversFromUdp.isNotEmpty) {
+              // Update connection status
+              final server = serversFromUdp.first;
+              isConnectedToServer.value = true;
+              connectedServerName.value = server.name;
+              connectedServerIp.value = server.ipAddress;
+              print('Connected to server via UDP broadcast: ${server.name} (${server.ipAddress})');
+              _consecutiveSuccessfulDiscoveries++;
+              _consecutiveFailedDiscoveries = 0;
+              discoverySuccess = true;
+              return; // Found server via UDP, no need for further discovery
+            }
+
+            // Short delay before trying again
+            if (i < 2) await Future.delayed(Duration(milliseconds: 200));
+          }
+        } else {
+          // Standard approach
+          await _discoverViaUdpBroadcast();
+
+          // Check if we found any servers through UDP broadcast
+          final serversFromUdp = knownDevices.where((d) => d.role == DeviceRole.server && d.id != deviceId).toList();
+          if (serversFromUdp.isNotEmpty) {
+            // Update connection status
+            final server = serversFromUdp.first;
+            isConnectedToServer.value = true;
+            connectedServerName.value = server.name;
+            connectedServerIp.value = server.ipAddress;
+            print('Connected to server via UDP broadcast: ${server.name} (${server.ipAddress})');
+            _consecutiveSuccessfulDiscoveries++;
+            _consecutiveFailedDiscoveries = 0;
+            discoverySuccess = true;
+            return; // Found server via UDP, no need for further discovery
+          }
+        }
+      } catch (e) {
+        print('UDP broadcast discovery failed: $e');
+        // Continue with regular discovery
+      }
+
+      // Regular device discovery as fallback
       await discoverDevices();
 
       // Check if we found any servers
-      final servers = knownDevices.where((d) => d.role == DeviceRole.server).toList();
+      final servers = knownDevices.where((d) => d.role == DeviceRole.server && d.id != deviceId).toList();
       if (servers.isNotEmpty) {
         // Update connection status
         final server = servers.first;
@@ -265,11 +543,24 @@ class NetworkService {
         connectedServerName.value = server.name;
         connectedServerIp.value = server.ipAddress;
         print('Connected to server: ${server.name} (${server.ipAddress})');
+        _consecutiveSuccessfulDiscoveries++;
+        _consecutiveFailedDiscoveries = 0;
+        discoverySuccess = true;
       } else {
         print('No servers found during auto-discovery');
+        _consecutiveFailedDiscoveries++;
+        _consecutiveSuccessfulDiscoveries = 0;
       }
     } catch (e) {
       print('Error during auto-discovery: $e');
+      _consecutiveFailedDiscoveries++;
+      _consecutiveSuccessfulDiscoveries = 0;
+    }
+
+    // Update discovery success tracking
+    if (!discoverySuccess) {
+      _consecutiveFailedDiscoveries++;
+      _consecutiveSuccessfulDiscoveries = 0;
     }
   }
 
@@ -277,9 +568,26 @@ class NetworkService {
 
   Future<shelf.Response> _handleSyncRequest(shelf.Request request) async {
     try {
-      final payload = await request.readAsString();
-      final data = jsonDecode(payload);
-      final syncBatch = SyncBatch.fromMap(data);
+      // Check for compression header
+      final contentEncoding = request.headers['x-content-encoding'];
+      final isCompressed = contentEncoding == 'gzip';
+
+      SyncBatch syncBatch;
+
+      if (isCompressed) {
+        // Handle compressed data
+        developer.log('Received compressed sync data');
+        final compressedBytes = await request.read().expand((chunk) => chunk).toList();
+        final decompressedBytes = gzip.decode(compressedBytes);
+        final decompressedJson = utf8.decode(decompressedBytes);
+        final data = jsonDecode(decompressedJson);
+        syncBatch = SyncBatch.fromMap(data);
+      } else {
+        // Handle regular JSON data
+        final payload = await request.readAsString();
+        final data = jsonDecode(payload);
+        syncBatch = SyncBatch.fromMap(data);
+      }
 
       developer.log('Received sync request from device ${syncBatch.deviceId} with ${syncBatch.items.length} items');
 
@@ -359,75 +667,221 @@ class NetworkService {
     try {
       developer.log('Pinging device at $ip:$port');
 
-      // Try multiple times with shorter timeouts
-      for (int attempt = 1; attempt <= 2; attempt++) {
-        try {
-          // Add security headers
-          final headers = {
-            'X-Client-ID': deviceId,
-            'X-Client-Name': deviceName,
-            'X-Client-Type': Platform.operatingSystem,
-          };
+      // Create a completer to handle the first successful response
+      final completer = Completer<bool>();
 
-          // Reduced timeout from seconds to milliseconds
-          final response = await http.get(
-            Uri.parse('http://$ip:$port/ping'),
-            headers: headers,
-          ).timeout(Duration(milliseconds: attempt == 1 ? 500 : 1000));
+      // Try multiple approaches in parallel for faster discovery
+      // 1. Fast HTTP ping with very short timeout
+      // 2. UDP ping (faster but less reliable)
+      // 3. Standard HTTP ping with longer timeout as fallback
 
-          if (response.statusCode == 200) {
-            try {
-              final data = jsonDecode(response.body);
-              final device = DeviceInfo.fromMap(data);
-
-              developer.log('Found device: ${device.name} (${device.ipAddress}) - Role: ${device.role == DeviceRole.server ? "Server" : "Client"}');
-
-              // Don't add ourselves to the list
-              if (device.id == deviceId) {
-                return true;
-              }
-
-              // Update connection cache for faster reconnection
-              final cacheKey = '$ip:$port';
-              _lastSuccessfulConnections[cacheKey] = DateTime.now();
-
-              // Update known devices
-              final existingIndex = knownDevices.indexWhere((d) => d.id == device.id);
-              if (existingIndex >= 0) {
-                knownDevices[existingIndex] = device;
-              } else {
-                knownDevices.add(device);
-              }
-
-              // If this is a server, make sure to save it to the database
-              if (device.role == DeviceRole.server) {
-                developer.log('Found a server! ${device.name} (${device.ipAddress})');
-
-                // Update connection status immediately for faster UI feedback
-                isConnectedToServer.value = true;
-                connectedServerName.value = device.name;
-                connectedServerIp.value = device.ipAddress;
-              }
-
-              return true;
-            } catch (e) {
-              developer.log('Error parsing device data from $ip: $e');
-              // Continue to next attempt
-            }
-          }
-        } catch (e) {
-          // This is expected for most IPs, so we'll only log in debug mode
-          if (kDebugMode && attempt == 2) {
-            developer.log('Failed ping attempt $attempt to $ip:$port');
-          }
-          // Continue to next attempt
+      // 1. Fast HTTP ping
+      _fastHttpPing(ip, port).then((success) {
+        if (success && !completer.isCompleted) {
+          completer.complete(true);
         }
-      }
+      }).catchError((_) {});
 
-      return false;
+      // 2. UDP ping (even faster)
+      _udpPing(ip, port).then((success) {
+        if (success && !completer.isCompleted) {
+          completer.complete(true);
+        }
+      }).catchError((_) {});
+
+      // 3. Standard HTTP ping as fallback
+      _standardHttpPing(ip, port).then((success) {
+        if (success && !completer.isCompleted) {
+          completer.complete(true);
+        } else if (!completer.isCompleted) {
+          completer.complete(false);
+        }
+      }).catchError((e) {
+        if (!completer.isCompleted) {
+          completer.complete(false);
+        }
+      });
+
+      // Wait for the first successful response or all to fail
+      return await completer.future.timeout(
+        Duration(milliseconds: 1500),
+        onTimeout: () {
+          developer.log('Ping timeout for $ip:$port');
+          return false;
+        },
+      );
     } catch (e) {
       developer.log('Unexpected error pinging device at $ip:$port: $e');
       return false;
+    }
+  }
+
+  // Fast HTTP ping with minimal timeout
+  Future<bool> _fastHttpPing(String ip, int port) async {
+    try {
+      // Add security headers
+      final headers = {
+        'X-Client-ID': deviceId,
+        'X-Client-Name': deviceName,
+        'X-Client-Type': Platform.operatingSystem,
+      };
+
+      // Very short timeout for quick response
+      final response = await http.get(
+        Uri.parse('http://$ip:$port/ping'),
+        headers: headers,
+      ).timeout(Duration(milliseconds: 300));
+
+      if (response.statusCode == 200) {
+        return await _processSuccessfulPingResponse(ip, port, response.body);
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Standard HTTP ping with longer timeout
+  Future<bool> _standardHttpPing(String ip, int port) async {
+    try {
+      // Add security headers
+      final headers = {
+        'X-Client-ID': deviceId,
+        'X-Client-Name': deviceName,
+        'X-Client-Type': Platform.operatingSystem,
+      };
+
+      // Longer timeout as fallback
+      final response = await http.get(
+        Uri.parse('http://$ip:$port/ping'),
+        headers: headers,
+      ).timeout(Duration(milliseconds: 1000));
+
+      if (response.statusCode == 200) {
+        return await _processSuccessfulPingResponse(ip, port, response.body);
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // UDP ping (faster but less reliable)
+  Future<bool> _udpPing(String ip, int port) async {
+    try {
+      final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+      final completer = Completer<bool>();
+
+      // Set up a timeout
+      final timeout = Timer(Duration(milliseconds: 300), () {
+        if (!completer.isCompleted) {
+          socket.close();
+          completer.complete(false);
+        }
+      });
+
+      // Listen for responses
+      socket.listen((RawSocketEvent event) {
+        if (event == RawSocketEvent.read) {
+          final datagram = socket.receive();
+          if (datagram != null && datagram.address.address == ip) {
+            try {
+              final response = String.fromCharCodes(datagram.data);
+              try {
+                final data = jsonDecode(response);
+                if (data['id'] != null && !completer.isCompleted) {
+                  // Create a device info object from the response
+                  final device = DeviceInfo(
+                    id: data['id'],
+                    name: data['name'] ?? 'Unknown Device',
+                    ipAddress: ip,
+                    port: data['port'] ?? port,
+                    role: DeviceRole.values[data['role'] as int],
+                    lastSeen: DateTime.now(),
+                  );
+
+                  // Process the device info
+                  _processDiscoveredDevice(device);
+
+                  // Complete the future
+                  timeout.cancel();
+                  socket.close();
+                  completer.complete(true);
+                }
+              } catch (e) {
+                // Ignore parsing errors
+              }
+            } catch (e) {
+              // Ignore processing errors
+            }
+          }
+        }
+      });
+
+      // Send ping message
+      final pingMessage = jsonEncode({
+        'id': deviceId,
+        'name': deviceName,
+        'role': deviceRole.index,
+        'action': 'ping',
+      });
+
+      socket.send(
+        utf8.encode(pingMessage),
+        InternetAddress(ip),
+        port
+      );
+
+      return await completer.future;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Process a successful ping response
+  Future<bool> _processSuccessfulPingResponse(String ip, int port, String responseBody) async {
+    try {
+      final data = jsonDecode(responseBody);
+      final device = DeviceInfo.fromMap(data);
+
+      developer.log('Found device: ${device.name} (${device.ipAddress}) - Role: ${device.role == DeviceRole.server ? "Server" : "Client"}');
+
+      // Don't add ourselves to the list
+      if (device.id == deviceId) {
+        return true;
+      }
+
+      // Process the device info
+      _processDiscoveredDevice(device);
+      return true;
+    } catch (e) {
+      developer.log('Error parsing device data from $ip: $e');
+      return false;
+    }
+  }
+
+  // Process a discovered device
+  void _processDiscoveredDevice(DeviceInfo device) {
+    // Update connection cache for faster reconnection
+    final cacheKey = '${device.ipAddress}:${device.port}';
+    _lastSuccessfulConnections[cacheKey] = DateTime.now();
+
+    // Update known devices
+    final existingIndex = knownDevices.indexWhere((d) => d.id == device.id);
+    if (existingIndex >= 0) {
+      knownDevices[existingIndex] = device;
+    } else {
+      knownDevices.add(device);
+    }
+
+    // If this is a server, update connection status immediately
+    if (device.role == DeviceRole.server) {
+      developer.log('Found a server! ${device.name} (${device.ipAddress})');
+
+      // Update connection status immediately for faster UI feedback
+      isConnectedToServer.value = true;
+      connectedServerName.value = device.name;
+      connectedServerIp.value = device.ipAddress;
     }
   }
 
@@ -459,63 +913,137 @@ class NetworkService {
     final baseIp = '${segments[0]}.${segments[1]}.${segments[2]}';
     developer.log('Scanning network with base IP: $baseIp');
 
-    // First check recently successful connections
-    final recentConnections = <String>[];
+    // Create a completer that will be completed when we find a server
+    // This allows us to stop scanning as soon as we find a server
+    final serverFoundCompleter = Completer<bool>();
+
+    // First check recently successful connections with higher priority
+    final recentConnections = <String, DateTime>{};
     _lastSuccessfulConnections.forEach((key, timestamp) {
       if (DateTime.now().difference(timestamp) < _connectionCacheValidity) {
         final parts = key.split(':');
         if (parts.length == 2) {
           final ip = parts[0];
           if (ip != ipAddress) {
-            recentConnections.add(ip);
+            recentConnections[ip] = timestamp;
           }
         }
       }
     });
 
+    // Sort recent connections by timestamp (most recent first)
+    final sortedRecentIps = recentConnections.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final recentIps = sortedRecentIps.map((e) => e.key).toList();
+
     // Try recent connections first with a short timeout
-    if (recentConnections.isNotEmpty) {
-      developer.log('Trying ${recentConnections.length} recent connections first');
+    if (recentIps.isNotEmpty) {
+      developer.log('Trying ${recentIps.length} recent connections first');
       final recentFutures = <Future<bool>>[];
 
-      for (final ip in recentConnections) {
-        recentFutures.add(pingDevice(ip, serverPort));
+      for (final ip in recentIps) {
+        recentFutures.add(pingDevice(ip, serverPort).then((success) {
+          if (success) {
+            // Check if we found a server
+            if (knownDevices.any((device) =>
+                device.role == DeviceRole.server &&
+                device.id != deviceId &&
+                device.ipAddress == ip)) {
+              if (!serverFoundCompleter.isCompleted) {
+                developer.log('Found server in recent connections: $ip');
+                serverFoundCompleter.complete(true);
+              }
+            }
+          }
+          return success;
+        }));
       }
 
       // Wait for recent connections with a short timeout
       await Future.wait(recentFutures);
 
       // If we found a server, we can stop here
-      if (knownDevices.any((device) => device.role == DeviceRole.server && device.id != deviceId)) {
+      if (serverFoundCompleter.isCompleted ||
+          knownDevices.any((device) => device.role == DeviceRole.server && device.id != deviceId)) {
         developer.log('Found server in recent connections, stopping discovery');
+
+        // Update the knownDevices list with new discoveries
+        _updateKnownDevicesList(newDevices, previousDevices);
+        return knownDevices;
+      }
+    }
+
+    // If manual IP is provided, try that specifically with high priority
+    if (manualIpAddress != null && manualIpAddress != ipAddress) {
+      developer.log('Trying manual IP: $manualIpAddress');
+      final success = await pingDevice(manualIpAddress!, serverPort);
+
+      if (success && knownDevices.any((device) =>
+          device.role == DeviceRole.server &&
+          device.id != deviceId &&
+          device.ipAddress == manualIpAddress)) {
+        developer.log('Found server at manual IP: $manualIpAddress');
+
+        // Update the knownDevices list with new discoveries
+        _updateKnownDevicesList(newDevices, previousDevices);
         return knownDevices;
       }
     }
 
     // Try common IPs (1, 100-105, 254) for faster discovery
+    // These are common IP addresses for routers and servers
     final commonIps = [1, 100, 101, 102, 103, 104, 105, 254];
     final commonFutures = <Future<bool>>[];
 
     for (int i in commonIps) {
       final ip = '$baseIp.$i';
-      if (ip != ipAddress && !recentConnections.contains(ip)) {
-        commonFutures.add(pingDevice(ip, serverPort));
+      if (ip != ipAddress && !recentIps.contains(ip)) {
+        commonFutures.add(pingDevice(ip, serverPort).then((success) {
+          if (success) {
+            // Check if we found a server
+            if (knownDevices.any((device) =>
+                device.role == DeviceRole.server &&
+                device.id != deviceId &&
+                device.ipAddress == ip)) {
+              if (!serverFoundCompleter.isCompleted) {
+                developer.log('Found server in common IPs: $ip');
+                serverFoundCompleter.complete(true);
+              }
+            }
+          }
+          return success;
+        }));
       }
     }
 
-    // Wait for common IPs to respond
+    // Wait for common IPs to respond or until we find a server
     await Future.wait(commonFutures);
 
     // If we found a server, we can stop here
-    if (knownDevices.any((device) => device.role == DeviceRole.server && device.id != deviceId)) {
-      developer.log('Found server in common IPs, stopping discovery');
+    if (serverFoundCompleter.isCompleted ||
+        knownDevices.any((device) => device.role == DeviceRole.server && device.id != deviceId)) {
+      developer.log('Found server, stopping discovery');
+
+      // Update the knownDevices list with new discoveries
+      _updateKnownDevicesList(newDevices, previousDevices);
       return knownDevices;
     }
 
-    // If manual IP is provided, try that specifically
-    if (manualIpAddress != null && manualIpAddress != ipAddress) {
-      developer.log('Trying manual IP: $manualIpAddress');
-      await pingDevice(manualIpAddress!, serverPort);
+    // Try UDP broadcast discovery as a faster alternative to scanning all IPs
+    try {
+      await _discoverViaUdpBroadcast();
+
+      // Check if we found a server through UDP broadcast
+      if (knownDevices.any((device) => device.role == DeviceRole.server && device.id != deviceId)) {
+        developer.log('Found server via UDP broadcast, stopping discovery');
+
+        // Update the knownDevices list with new discoveries
+        _updateKnownDevicesList(newDevices, previousDevices);
+        return knownDevices;
+      }
+    } catch (e) {
+      developer.log('UDP broadcast discovery failed: $e');
+      // Continue with IP scanning if UDP broadcast fails
     }
 
     // If we still don't have a server, scan more IPs but in parallel batches
@@ -537,8 +1065,22 @@ class NetworkService {
 
         for (int i = startRange; i <= endRange && i <= 254; i++) {
           final ip = '$baseIp.$i';
-          if (ip != ipAddress && !commonIps.contains(i) && !recentConnections.contains(ip)) {
-            allFutures.add(pingDevice(ip, serverPort));
+          if (ip != ipAddress && !commonIps.contains(i) && !recentIps.contains(ip)) {
+            allFutures.add(pingDevice(ip, serverPort).then((success) {
+              if (success) {
+                // Check if we found a server
+                if (knownDevices.any((device) =>
+                    device.role == DeviceRole.server &&
+                    device.id != deviceId &&
+                    device.ipAddress == ip)) {
+                  if (!serverFoundCompleter.isCompleted) {
+                    developer.log('Found server in IP scan: $ip');
+                    serverFoundCompleter.complete(true);
+                  }
+                }
+              }
+              return success;
+            }));
           }
         }
       }
@@ -547,7 +1089,7 @@ class NetworkService {
       if (allFutures.isNotEmpty) {
         developer.log('Scanning ${allFutures.length} IPs in parallel');
         await Future.wait(allFutures).timeout(
-          const Duration(seconds: 3),
+          const Duration(seconds: 2), // Reduced timeout for faster discovery
           onTimeout: () {
             developer.log('IP scan timeout reached, continuing with discovered devices');
             return [];
@@ -557,6 +1099,14 @@ class NetworkService {
     }
 
     // Update the knownDevices list with new discoveries
+    _updateKnownDevicesList(newDevices, previousDevices);
+
+    developer.log('Discovery complete. Found ${knownDevices.length} devices');
+    return knownDevices;
+  }
+
+  // Helper method to update the known devices list
+  void _updateKnownDevicesList(List<DeviceInfo> newDevices, List<DeviceInfo> previousDevices) {
     knownDevices.clear();
     knownDevices.addAll(newDevices);
 
@@ -566,9 +1116,131 @@ class NetworkService {
         knownDevices.add(device);
       }
     }
+  }
 
-    developer.log('Discovery complete. Found ${knownDevices.length} devices');
-    return knownDevices;
+  // Broadcast server presence to help clients find it faster
+  Future<void> _broadcastServerPresence() async {
+    if (deviceRole != DeviceRole.server || ipAddress == null) return;
+
+    try {
+      // Create a UDP socket for broadcasting
+      final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+
+      // Prepare server announcement message
+      final announcement = jsonEncode({
+        'id': deviceId,
+        'name': deviceName,
+        'role': deviceRole.index,
+        'port': serverPort,
+        'action': 'server_announcement',
+        'last_seen': DateTime.now().toIso8601String(),
+      });
+
+      // Send to broadcast address
+      final segments = ipAddress!.split('.');
+      if (segments.length == 4) {
+        final broadcastIp = '${segments[0]}.${segments[1]}.${segments[2]}.255';
+        socket.send(
+          utf8.encode(announcement),
+          InternetAddress(broadcastIp),
+          serverPort
+        );
+        developer.log('Broadcast server presence to $broadcastIp:$serverPort');
+      }
+
+      // Close the socket
+      socket.close();
+    } catch (e) {
+      developer.log('Error broadcasting server presence: $e');
+    }
+  }
+
+  // Discover devices using UDP broadcast
+  Future<void> _discoverViaUdpBroadcast() async {
+    try {
+      developer.log('Starting UDP broadcast discovery');
+      final RawDatagramSocket socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+
+      // Set up a listener for responses
+      final completer = Completer<void>();
+      final responseTimeout = Timer(Duration(milliseconds: 800), () {
+        if (!completer.isCompleted) {
+          completer.complete();
+        }
+      });
+
+      socket.listen((RawSocketEvent event) {
+        if (event == RawSocketEvent.read) {
+          final datagram = socket.receive();
+          if (datagram != null) {
+            try {
+              final response = String.fromCharCodes(datagram.data);
+              developer.log('Received UDP response from ${datagram.address.address}: $response');
+
+              // Try to parse the response as JSON
+              try {
+                final data = jsonDecode(response);
+                if (data['id'] != null && data['role'] != null) {
+                  // Create a device info object from the response
+                  final device = DeviceInfo(
+                    id: data['id'],
+                    name: data['name'] ?? 'Unknown Device',
+                    ipAddress: datagram.address.address,
+                    port: data['port'] ?? serverPort,
+                    role: DeviceRole.values[data['role'] as int],
+                    lastSeen: DateTime.now(),
+                  );
+
+                  // Process the discovered device
+                  _processDiscoveredDevice(device);
+                  developer.log('Added device from UDP broadcast: ${device.name} (${device.ipAddress})');
+
+                  // If this is a server and we're a client, update connection status immediately
+                  if (device.role == DeviceRole.server && deviceRole == DeviceRole.client) {
+                    isConnectedToServer.value = true;
+                    connectedServerName.value = device.name;
+                    connectedServerIp.value = device.ipAddress;
+                    developer.log('Connected to server via UDP: ${device.name} (${device.ipAddress})');
+                  }
+                }
+              } catch (e) {
+                developer.log('Error parsing UDP response: $e');
+              }
+            } catch (e) {
+              developer.log('Error processing UDP datagram: $e');
+            }
+          }
+        }
+      });
+
+      // Send broadcast message
+      final broadcastMessage = jsonEncode({
+        'id': deviceId,
+        'name': deviceName,
+        'role': deviceRole.index,
+        'action': 'discovery',
+      });
+
+      // Send to broadcast address
+      final segments = ipAddress!.split('.');
+      if (segments.length == 4) {
+        final broadcastIp = '${segments[0]}.${segments[1]}.${segments[2]}.255';
+        socket.send(
+          utf8.encode(broadcastMessage),
+          InternetAddress(broadcastIp),
+          serverPort
+        );
+        developer.log('Sent UDP broadcast to $broadcastIp:$serverPort');
+      }
+
+      // Wait for responses
+      await completer.future;
+      responseTimeout.cancel();
+      socket.close();
+      developer.log('UDP broadcast discovery completed');
+    } catch (e) {
+      developer.log('Error in UDP broadcast discovery: $e');
+    }
   }
 
   Future<bool> sendSyncBatch(DeviceInfo targetDevice, SyncBatch batch) async {
@@ -585,71 +1257,219 @@ class NetworkService {
       final cacheKey = '${targetDevice.ipAddress}:${targetDevice.port}';
       _lastSuccessfulConnections[cacheKey] = DateTime.now();
 
-      // Skip ping and try to send data directly for faster operation
-      // This is more efficient since we'll know if it fails anyway
+      // Compress the data for faster transfer
+      final batchMap = batch.toMap();
+      final jsonData = jsonEncode(batchMap);
+      final compressedData = gzip.encode(utf8.encode(jsonData));
 
-      // Try to send the sync batch
-      final url = 'http://${targetDevice.ipAddress}:${targetDevice.port}/sync';
-      developer.log('Sending request to: $url');
+      // Calculate compression ratio for logging
+      final originalSize = jsonData.length;
+      final compressedSize = compressedData.length;
+      final compressionRatio = (originalSize > 0) ? (100 - (compressedSize * 100 / originalSize)).toStringAsFixed(1) : '0';
+      developer.log('Data compressed from $originalSize to $compressedSize bytes ($compressionRatio% reduction)');
 
-      try {
-        // Add security headers
-        final headers = {
-          'Content-Type': 'application/json',
-          'X-Client-ID': deviceId,
-          'X-Client-Name': deviceName,
-          'X-Client-Type': Platform.operatingSystem,
-        };
+      // Create a completer to handle the first successful response
+      final completer = Completer<bool>();
 
-        // Reduced timeout from 15 to 5 seconds for faster failure detection
-        final response = await http.post(
-          Uri.parse(url),
-          headers: headers,
-          body: jsonEncode(batch.toMap()),
-        ).timeout(const Duration(seconds: 5));
+      // Try multiple approaches in parallel for faster sync
+      // 1. Standard HTTP POST with compressed data
+      // 2. Chunked HTTP POST for larger datasets
+      // 3. UDP-based sync for small datasets (fastest but less reliable)
 
-        if (response.statusCode == 200) {
-          developer.log('Successfully sent sync batch to ${targetDevice.ipAddress}');
-          return true;
-        } else {
-          developer.log('Failed to send sync batch. Status code: ${response.statusCode}');
-          return false;
-        }
-      } catch (httpError) {
-        developer.log('HTTP error sending sync batch: $httpError');
-
-        // Try one more time with a different approach and shorter timeout
-        try {
-          developer.log('Trying alternative HTTP client for sync...');
-          final client = http.Client();
-          final request = http.Request('POST', Uri.parse(url));
-
-          // Add security headers
-          request.headers['Content-Type'] = 'application/json';
-          request.headers['X-Client-ID'] = deviceId;
-          request.headers['X-Client-Name'] = deviceName;
-          request.headers['X-Client-Type'] = Platform.operatingSystem;
-          request.body = jsonEncode(batch.toMap());
-
-          // Reduced timeout from 20 to 8 seconds
-          final streamedResponse = await client.send(request).timeout(const Duration(seconds: 8));
-          final response = await http.Response.fromStream(streamedResponse);
-          client.close();
-
-          if (response.statusCode == 200) {
-            developer.log('Alternative HTTP method succeeded!');
-            return true;
-          } else {
-            developer.log('Alternative HTTP method failed. Status: ${response.statusCode}');
-            return false;
+      // Only use UDP for small datasets (less than 1000 bytes)
+      if (compressedSize < 1000) {
+        // Try UDP first for small datasets (fastest)
+        _sendSyncViaUdp(targetDevice, batch).then((success) {
+          if (success && !completer.isCompleted) {
+            developer.log('UDP sync succeeded!');
+            completer.complete(true);
           }
-        } catch (retryError) {
-          developer.log('Retry also failed: $retryError');
-          return false;
-        }
+        }).catchError((_) {});
       }
+
+      // Always try HTTP POST (most reliable)
+      _sendSyncViaHttp(targetDevice, compressedData, true).then((success) {
+        if (success && !completer.isCompleted) {
+          developer.log('HTTP sync succeeded!');
+          completer.complete(true);
+        }
+      }).catchError((_) {});
+
+      // For larger datasets, also try chunked transfer
+      if (compressedSize > 10000) {
+        _sendSyncViaChunkedHttp(targetDevice, compressedData).then((success) {
+          if (success && !completer.isCompleted) {
+            developer.log('Chunked HTTP sync succeeded!');
+            completer.complete(true);
+          }
+        }).catchError((_) {});
+      }
+
+      // Set a timeout and fallback to standard HTTP if all parallel attempts fail
+      Timer(Duration(milliseconds: 2000), () {
+        if (!completer.isCompleted) {
+          developer.log('Parallel sync attempts timed out, trying standard HTTP as fallback');
+          _sendSyncViaHttp(targetDevice, compressedData, false).then((success) {
+            completer.complete(success);
+          }).catchError((e) {
+            developer.log('Fallback HTTP sync failed: $e');
+            completer.complete(false);
+          });
+        }
+      });
+
+      // Wait for the first successful response or all to fail
+      return await completer.future.timeout(
+        Duration(seconds: 5),
+        onTimeout: () {
+          developer.log('All sync attempts timed out');
+          return false;
+        },
+      );
     } catch (e) {
       developer.log('Error sending sync batch: $e');
+      return false;
+    }
+  }
+
+  // Send sync data via standard HTTP POST
+  Future<bool> _sendSyncViaHttp(DeviceInfo targetDevice, List<int> compressedData, bool useShortTimeout) async {
+    try {
+      final url = 'http://${targetDevice.ipAddress}:${targetDevice.port}/sync';
+      developer.log('Sending HTTP sync to: $url');
+
+      // Add security and compression headers
+      final headers = {
+        'Content-Type': 'application/octet-stream',
+        'X-Client-ID': deviceId,
+        'X-Client-Name': deviceName,
+        'X-Client-Type': Platform.operatingSystem,
+        'X-Content-Encoding': 'gzip',
+      };
+
+      // Use a shorter timeout for parallel attempts
+      final timeout = useShortTimeout ? Duration(milliseconds: 1500) : Duration(seconds: 4);
+
+      final response = await http.post(
+        Uri.parse(url),
+        headers: headers,
+        body: compressedData,
+      ).timeout(timeout);
+
+      if (response.statusCode == 200) {
+        developer.log('Successfully sent sync batch via HTTP');
+        return true;
+      } else {
+        developer.log('Failed to send sync batch via HTTP. Status code: ${response.statusCode}');
+        return false;
+      }
+    } catch (e) {
+      developer.log('Error in HTTP sync: $e');
+      return false;
+    }
+  }
+
+  // Send sync data via chunked HTTP POST for larger datasets
+  Future<bool> _sendSyncViaChunkedHttp(DeviceInfo targetDevice, List<int> compressedData) async {
+    try {
+      final url = 'http://${targetDevice.ipAddress}:${targetDevice.port}/sync';
+      developer.log('Sending chunked HTTP sync to: $url');
+
+      final client = http.Client();
+      final request = http.Request('POST', Uri.parse(url));
+
+      // Add security and compression headers
+      request.headers['Content-Type'] = 'application/octet-stream';
+      request.headers['X-Client-ID'] = deviceId;
+      request.headers['X-Client-Name'] = deviceName;
+      request.headers['X-Client-Type'] = Platform.operatingSystem;
+      request.headers['X-Content-Encoding'] = 'gzip';
+      request.headers['Transfer-Encoding'] = 'chunked';
+
+      // Set the body bytes directly
+      request.bodyBytes = compressedData;
+
+      final streamedResponse = await client.send(request).timeout(Duration(seconds: 4));
+      final response = await http.Response.fromStream(streamedResponse);
+      client.close();
+
+      if (response.statusCode == 200) {
+        developer.log('Successfully sent sync batch via chunked HTTP');
+        return true;
+      } else {
+        developer.log('Failed to send sync batch via chunked HTTP. Status code: ${response.statusCode}');
+        return false;
+      }
+    } catch (e) {
+      developer.log('Error in chunked HTTP sync: $e');
+      return false;
+    }
+  }
+
+  // Send sync data via UDP for small datasets (fastest but less reliable)
+  Future<bool> _sendSyncViaUdp(DeviceInfo targetDevice, SyncBatch batch) async {
+    try {
+      // Only use UDP for very small batches
+      if (batch.items.length > 5) {
+        return false; // Too many items for UDP
+      }
+
+      developer.log('Trying UDP sync to ${targetDevice.ipAddress}:${targetDevice.port}');
+      final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+      final completer = Completer<bool>();
+
+      // Set up a timeout
+      final timeout = Timer(Duration(milliseconds: 800), () {
+        if (!completer.isCompleted) {
+          socket.close();
+          completer.complete(false);
+        }
+      });
+
+      // Listen for acknowledgement
+      socket.listen((RawSocketEvent event) {
+        if (event == RawSocketEvent.read) {
+          final datagram = socket.receive();
+          if (datagram != null && datagram.address.address == targetDevice.ipAddress) {
+            try {
+              final response = String.fromCharCodes(datagram.data);
+              try {
+                final data = jsonDecode(response);
+                if (data['status'] == 'success' && !completer.isCompleted) {
+                  // Got success acknowledgement
+                  timeout.cancel();
+                  socket.close();
+                  completer.complete(true);
+                }
+              } catch (e) {
+                // Ignore parsing errors
+              }
+            } catch (e) {
+              // Ignore processing errors
+            }
+          }
+        }
+      });
+
+      // Prepare sync message
+      final syncMessage = jsonEncode({
+        'id': deviceId,
+        'name': deviceName,
+        'role': deviceRole.index,
+        'action': 'sync',
+        'batch': batch.toMap(),
+      });
+
+      // Send the message
+      socket.send(
+        utf8.encode(syncMessage),
+        InternetAddress(targetDevice.ipAddress),
+        targetDevice.port
+      );
+
+      return await completer.future;
+    } catch (e) {
+      developer.log('Error in UDP sync: $e');
       return false;
     }
   }

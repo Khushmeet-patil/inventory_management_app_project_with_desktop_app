@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:uuid/uuid.dart';
 import '../controllers/product_controller.dart';
 import '../utils/toast_util.dart';
+import '../utils/barcode_scanner_util.dart';
 
 class ReturnPage extends StatefulWidget {
   @override
@@ -38,23 +38,11 @@ class _ReturnPageState extends State<ReturnPage> {
                 IconButton(
                   icon: Icon(Icons.qr_code_scanner),
                   onPressed: () async {
-                    await Get.dialog(
-                      Dialog(
-                        child: Container(
-                          height: 300,
-                          child: MobileScanner(
-                            onDetect: (capture) {
-                              final scannedBarcode = capture.barcodes.first.rawValue;
-                              if (scannedBarcode != null) {
-                                barcode = scannedBarcode;
-                                Get.back();
-                              }
-                            },
-                          ),
-                        ),
-                      ),
-                    );
-                    setState(() {});
+                    final scannedBarcode = await BarcodeScannerUtil.scanBarcode(context);
+                    if (scannedBarcode != null) {
+                      barcode = scannedBarcode;
+                      setState(() {});
+                    }
                   },
                 ),
               ],
@@ -98,7 +86,9 @@ class _ReturnPageState extends State<ReturnPage> {
   }
 
   void _confirmReturn() async {
+    print('Confirm return button pressed');
     if (_personController.text.isEmpty) {
+      print('Error: Person name is empty');
       try {
         ToastUtil.showError('enter_person_name'.tr);
       } catch (e) {
@@ -107,6 +97,7 @@ class _ReturnPageState extends State<ReturnPage> {
       return;
     }
     if (_returnList.isEmpty) {
+      print('Error: No products to return');
       try {
         ToastUtil.showError('no_products_to_return'.tr);
       } catch (e) {
@@ -133,12 +124,14 @@ class _ReturnPageState extends State<ReturnPage> {
     );
 
     try {
+      print('Calling batch return products method');
       // Use the optimized batch return method for better performance
       await _controller.batchReturnProducts(
         _returnList,
         _personController.text,
         agency: _agencyController.text.isNotEmpty ? _agencyController.text : null,
       );
+      print('Batch return completed successfully');
 
       // Close loading dialog
       Navigator.of(context).pop();
@@ -149,6 +142,7 @@ class _ReturnPageState extends State<ReturnPage> {
       // Close loading dialog on error
       Navigator.of(context).pop();
       print('Error in batch return: $e');
+      ToastUtil.showError('Error: ${e.toString()}');
     }
   }
 

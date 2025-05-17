@@ -128,6 +128,10 @@ final Map<String, String> enTranslations = {
   'client': 'Client',
   'processing_rental': 'Processing rental...',
   'processing_return': 'Processing return...',
+  'scan_barcode': 'Scan Barcode',
+  'manual_entry': 'Manual Entry',
+  'enter_barcode_manually': 'Enter Barcode Manually',
+  'confirm': 'Confirm',
 
   // Edit Product
   'edit_product': 'Edit Product',

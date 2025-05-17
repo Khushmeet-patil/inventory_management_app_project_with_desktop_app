@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:uuid/uuid.dart';
 import '../controllers/product_controller.dart';
 import '../utils/toast_util.dart';
+import '../utils/barcode_scanner_util.dart';
 
 class RentPage extends StatefulWidget {
   @override
@@ -38,23 +38,11 @@ class _RentPageState extends State<RentPage> {
                 IconButton(
                   icon: Icon(Icons.qr_code_scanner),
                   onPressed: () async {
-                    await Get.dialog(
-                      Dialog(
-                        child: Container(
-                          height: 300,
-                          child: MobileScanner(
-                            onDetect: (capture) {
-                              final scannedBarcode = capture.barcodes.first.rawValue;
-                              if (scannedBarcode != null) {
-                                barcode = scannedBarcode;
-                                Get.back();
-                              }
-                            },
-                          ),
-                        ),
-                      ),
-                    );
-                    setState(() {});
+                    final scannedBarcode = await BarcodeScannerUtil.scanBarcode(context);
+                    if (scannedBarcode != null) {
+                      barcode = scannedBarcode;
+                      setState(() {});
+                    }
                   },
                 ),
               ],
@@ -99,7 +87,9 @@ class _RentPageState extends State<RentPage> {
   }
 
   void _confirmRent() async {
+    print('Confirm rent button pressed');
     if (_personController.text.isEmpty) {
+      print('Error: Person name is empty');
       try {
         ToastUtil.showError('enter_person_name'.tr);
       } catch (e) {
@@ -108,6 +98,7 @@ class _RentPageState extends State<RentPage> {
       return;
     }
     if (_rentList.isEmpty) {
+      print('Error: No products to rent');
       try {
         ToastUtil.showError('no_products_to_rent'.tr);
       } catch (e) {
@@ -134,12 +125,14 @@ class _RentPageState extends State<RentPage> {
     );
 
     try {
+      print('Calling batch rent products method');
       // Use the optimized batch rent method for better performance
       await _controller.batchRentProducts(
         _rentList,
         _personController.text,
         agency: _agencyController.text.isNotEmpty ? _agencyController.text : null,
       );
+      print('Batch rent completed successfully');
 
       // Close loading dialog
       Navigator.of(context).pop();
@@ -150,6 +143,7 @@ class _RentPageState extends State<RentPage> {
       // Close loading dialog on error
       Navigator.of(context).pop();
       print('Error in batch rent: $e');
+      ToastUtil.showError('Error: ${e.toString()}');
     }
   }
 

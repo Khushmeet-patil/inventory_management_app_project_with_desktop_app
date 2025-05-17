@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import 'package:uuid/uuid.dart';
+import 'package:file_selector/file_selector.dart';
 import 'image_optimizer_util.dart';
 
 class ImagePickerUtil {
@@ -13,10 +14,35 @@ class ImagePickerUtil {
   // Pick an image from camera
   static Future<String?> pickImageFromCamera() async {
     try {
-      final XFile? image = await _picker.pickImage(
-        source: ImageSource.camera,
-        imageQuality: 80, // Reduce image quality to save space
-      );
+      XFile? image;
+
+      // Use different approach for Windows
+      if (Platform.isWindows) {
+        try {
+          // First try to use the camera_windows plugin via image_picker
+          image = await _picker.pickImage(
+            source: ImageSource.camera,
+            imageQuality: 80,
+          );
+
+          // If that fails, fall back to file selector
+          if (image == null) {
+            print('Windows camera via image_picker failed, using file selector as fallback');
+            final typeGroup = XTypeGroup(label: 'images', extensions: ['jpg', 'jpeg', 'png']);
+            image = await openFile(acceptedTypeGroups: [typeGroup]);
+          }
+        } catch (e) {
+          print('Windows camera error: $e');
+          // Fallback to gallery picker
+          return await pickImageFromGallery();
+        }
+      } else {
+        // For other platforms, use the image_picker
+        image = await _picker.pickImage(
+          source: ImageSource.camera,
+          imageQuality: 80, // Reduce image quality to save space
+        );
+      }
 
       if (image != null) {
         return await _saveImageToAppDirectory(image);
@@ -31,10 +57,20 @@ class ImagePickerUtil {
   // Pick an image from gallery
   static Future<String?> pickImageFromGallery() async {
     try {
-      final XFile? image = await _picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 80, // Reduce image quality to save space
-      );
+      XFile? image;
+
+      // Use different approach for Windows
+      if (Platform.isWindows) {
+        // On Windows, use file_selector
+        final typeGroup = XTypeGroup(label: 'images', extensions: ['jpg', 'jpeg', 'png']);
+        image = await openFile(acceptedTypeGroups: [typeGroup]);
+      } else {
+        // For other platforms, use the image_picker
+        image = await _picker.pickImage(
+          source: ImageSource.gallery,
+          imageQuality: 80, // Reduce image quality to save space
+        );
+      }
 
       if (image != null) {
         return await _saveImageToAppDirectory(image);
@@ -162,7 +198,7 @@ class ImagePickerUtil {
                 GestureDetector(
                   child: ListTile(
                     leading: Icon(Icons.camera_alt),
-                    title: Text('Camera'),
+                    title: Text(Platform.isWindows ? 'Camera/File' : 'Camera'),
                   ),
                   onTap: () async {
                     Navigator.of(context).pop(await pickImageFromCamera());

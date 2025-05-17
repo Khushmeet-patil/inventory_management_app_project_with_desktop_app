@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:get/get.dart';
 import 'package:uuid/uuid.dart';
 import '../models/product_model.dart';
@@ -68,34 +69,68 @@ class ProductController extends GetxController {
 
   Future<void> addNewProduct(Product product) async {
     try {
+      print('Adding new product: ${product.name} with barcode ${product.barcode}');
+
       // Validate product data
       if (product.barcode.isEmpty) {
+        print('Error: Barcode is empty');
         ToastUtil.showError('Barcode cannot be empty');
         return;
       }
 
       if (product.name.isEmpty) {
+        print('Error: Product name is empty');
         ToastUtil.showError('Product name cannot be empty');
         return;
       }
 
       // Add the product - this now handles history entry in a single transaction
-      final addedProduct = await _dbService.addProductWithSync(product);
+      print('Calling database service to add product');
+
+      // Use a timeout to prevent hanging
+      final addedProduct = await _dbService.addProductWithSync(product).timeout(
+        Duration(seconds: 30),
+        onTimeout: () {
+          throw TimeoutException('Adding product timed out after 30 seconds');
+        },
+      );
+
+      print('Product added successfully with ID: ${addedProduct.id}');
 
       // Reload data without immediate sync for better performance
+      print('Reloading data');
       await loadData();
 
       // Schedule a sync in the background
+      print('Scheduling background sync');
       _syncService.syncImmediately().catchError((e) {
         print('Background sync error: $e');
         // Ignore sync errors to keep UI responsive
       });
 
       // Show success message
-      ToastUtil.showSuccess('Product added successfully');
+      print('Showing success message');
+      try {
+        ToastUtil.showSuccess('Product added successfully');
+      } catch (toastError) {
+        print('Error showing success toast: $toastError');
+        // Continue execution even if toast fails
+      }
+
+      print('Product addition completed successfully');
     } catch (e) {
       print('Error adding new product: $e');
-      ToastUtil.showError('Failed to add product');
+      print('Stack trace: ${StackTrace.current}');
+
+      // Try to show error message
+      try {
+        ToastUtil.showError('Failed to add product: ${e.toString()}');
+      } catch (toastError) {
+        print('Error showing error toast: $toastError');
+      }
+
+      // Rethrow the exception to be handled by the UI
+      rethrow;
     }
   }
 
@@ -105,11 +140,13 @@ class ProductController extends GetxController {
 
       // Validate input
       if (barcode.isEmpty) {
+        print('Error: Barcode is empty');
         ToastUtil.showError('Barcode cannot be empty');
         return;
       }
 
       if (quantity <= 0) {
+        print('Error: Quantity must be greater than zero');
         ToastUtil.showError('Quantity must be greater than zero');
         return;
       }
@@ -260,12 +297,16 @@ class ProductController extends GetxController {
   /// Rent multiple products in a single batch operation for better performance
   Future<void> batchRentProducts(List<Map<String, dynamic>> rentItems, String givenTo, {String? agency}) async {
     try {
+      print('Batch renting ${rentItems.length} products to $givenTo');
+
       if (rentItems.isEmpty) {
-        print('No products to rent');
+        print('Error: No products to rent');
+        ToastUtil.showError('No products to rent');
         return;
       }
 
       if (givenTo.isEmpty) {
+        print('Error: Recipient name is empty');
         ToastUtil.showError('Recipient name cannot be empty');
         return;
       }
@@ -275,27 +316,32 @@ class ProductController extends GetxController {
       print('Generated transaction ID for batch rental: $transactionId');
 
       // Use the batch operation for better performance
+      print('Calling database service to batch rent products');
       await _dbService.batchRentProducts(
         rentItems,
         givenTo,
         agency,
         transactionId,
       );
+      print('Products rented successfully');
 
       // Reload data without waiting for sync to complete
-      loadData();
+      print('Reloading data');
+      await loadData();
 
       // Trigger sync in the background
+      print('Scheduling background sync');
       _syncService.syncImmediately().catchError((e) {
         print('Background sync error: $e');
         // Ignore sync errors to keep UI responsive
       });
 
       // Show success message
+      print('Showing success message');
       ToastUtil.showSuccess('Products rented successfully');
     } catch (e) {
       print('Error batch renting products: $e');
-      ToastUtil.showError('Failed to rent products: $e');
+      ToastUtil.showError('Failed to rent products: ${e.toString()}');
     }
   }
 
@@ -377,12 +423,16 @@ class ProductController extends GetxController {
   /// Return multiple products in a single batch operation for better performance
   Future<void> batchReturnProducts(List<Map<String, dynamic>> returnItems, String returnedBy, {String? agency}) async {
     try {
+      print('Batch returning ${returnItems.length} products by $returnedBy');
+
       if (returnItems.isEmpty) {
-        print('No products to return');
+        print('Error: No products to return');
+        ToastUtil.showError('No products to return');
         return;
       }
 
       if (returnedBy.isEmpty) {
+        print('Error: Returned by name is empty');
         ToastUtil.showError('Returned by name cannot be empty');
         return;
       }
@@ -392,27 +442,32 @@ class ProductController extends GetxController {
       print('Generated transaction ID for batch return: $transactionId');
 
       // Use the batch operation for better performance
+      print('Calling database service to batch return products');
       await _dbService.batchReturnProducts(
         returnItems,
         returnedBy,
         agency,
         transactionId,
       );
+      print('Products returned successfully');
 
       // Reload data without waiting for sync to complete
-      loadData();
+      print('Reloading data');
+      await loadData();
 
       // Trigger sync in the background
+      print('Scheduling background sync');
       _syncService.syncImmediately().catchError((e) {
         print('Background sync error: $e');
         // Ignore sync errors to keep UI responsive
       });
 
       // Show success message
+      print('Showing success message');
       ToastUtil.showSuccess('Products returned successfully');
     } catch (e) {
       print('Error batch returning products: $e');
-      ToastUtil.showError('Failed to return products: $e');
+      ToastUtil.showError('Failed to return products: ${e.toString()}');
     }
   }
 

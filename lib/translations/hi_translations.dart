@@ -117,6 +117,10 @@ final Map<String, String> hiTranslations = {
   'client': 'क्लाइंट',
   'processing_rental': 'किराया प्रोसेस हो रहा है...',
   'processing_return': 'वापसी प्रोसेस हो रही है...',
+  'scan_barcode': 'बारकोड स्कैन करें',
+  'manual_entry': 'मैनुअल प्रविष्टि',
+  'enter_barcode_manually': 'बारकोड मैन्युअली दर्ज करें',
+  'confirm': 'पुष्टि करें',
 
   // Edit Product
   'edit_product': 'उत्पाद संपादित करें',

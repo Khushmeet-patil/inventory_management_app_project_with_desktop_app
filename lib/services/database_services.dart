@@ -1,8 +1,9 @@
 import 'dart:convert';
-import 'dart:io' show Platform;
+import 'dart:io';
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import '../models/product_model.dart';
 import '../models/history_model.dart';
@@ -22,10 +23,26 @@ class DatabaseService {
     // Initialize FFI for desktop platforms
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
       print('Initializing database for desktop platform');
-      // Initialize FFI
-      sqfliteFfiInit();
-      // Change the default factory for desktop
-      databaseFactory = databaseFactoryFfi;
+      try {
+        // Initialize FFI
+        sqfliteFfiInit();
+        // Change the default factory for desktop
+        databaseFactory = databaseFactoryFfi;
+        print('Successfully initialized FFI for desktop platform');
+      } catch (e) {
+        print('Error initializing FFI for desktop platform: $e');
+        print('Stack trace: ${StackTrace.current}');
+        // Try again with a different approach
+        try {
+          print('Trying alternative initialization for desktop platform');
+          // Force re-initialization
+          sqfliteFfiInit();
+          databaseFactory = databaseFactoryFfi;
+          print('Alternative initialization successful');
+        } catch (e2) {
+          print('Alternative initialization also failed: $e2');
+        }
+      }
     } else {
       print('Using default database factory for mobile platform');
     }
@@ -57,8 +74,40 @@ class DatabaseService {
   Future<Database> _initDB(String filePath) async {
     try {
       String dbPath;
-      if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-        // For desktop, use a path in the app documents directory
+      if (Platform.isWindows) {
+        // For Windows, use a specific approach to ensure proper path handling
+        try {
+          // Try to get the database path
+          dbPath = await getDatabasesPath();
+          print('Windows database path (initial): $dbPath');
+
+          // Ensure the directory exists
+          final dbDir = Directory(dbPath);
+          if (!await dbDir.exists()) {
+            print('Creating database directory: $dbPath');
+            await dbDir.create(recursive: true);
+          }
+
+          // Normalize path for Windows
+          dbPath = dbPath.replaceAll('\\', '/');
+          print('Windows database path (normalized): $dbPath');
+        } catch (e) {
+          // Fallback to application documents directory
+          print('Error getting database path for Windows: $e');
+          print('Using fallback path');
+          final appDocDir = await getApplicationDocumentsDirectory();
+          dbPath = join(appDocDir.path, 'databases');
+          print('Windows fallback database path: $dbPath');
+
+          // Ensure the directory exists
+          final dbDir = Directory(dbPath);
+          if (!await dbDir.exists()) {
+            print('Creating fallback database directory: $dbPath');
+            await dbDir.create(recursive: true);
+          }
+        }
+      } else if (Platform.isLinux || Platform.isMacOS) {
+        // For other desktop platforms
         dbPath = await getDatabasesPath();
         print('Desktop database path: $dbPath');
       } else {
@@ -70,6 +119,18 @@ class DatabaseService {
       final path = join(dbPath, filePath);
       print('Full database path: $path');
 
+      // Ensure the database file is accessible
+      try {
+        final dbFile = File(path);
+        if (!await dbFile.exists()) {
+          print('Database file does not exist yet, will be created');
+        } else {
+          print('Database file exists and is accessible');
+        }
+      } catch (e) {
+        print('Error checking database file: $e');
+      }
+
       return await openDatabase(
         path,
         version: 4, // Increased version for new schema
@@ -78,6 +139,7 @@ class DatabaseService {
       );
     } catch (e) {
       print('Error in _initDB: $e');
+      print('Stack trace: ${StackTrace.current}');
       rethrow;
     }
   }
@@ -194,10 +256,16 @@ class DatabaseService {
       final existing = await getProductByBarcode(product.barcode);
       if (existing != null) {
         print('Product with barcode ${product.barcode} already exists, updating instead');
+
+        // IMPORTANT: Always add quantities when adding a product that already exists
+        // This ensures we don't lose data during sync
+        final int newQuantity = (existing.quantity ?? 0) + (product.quantity ?? 0);
+        print('Merging quantities: ${existing.quantity ?? 0} + ${product.quantity ?? 0} = $newQuantity');
+
         // Update the existing product instead of adding a new one
         final updatedProduct = existing.copyWith(
           name: product.name,
-          quantity: (existing.quantity ?? 0) + (product.quantity ?? 0),
+          quantity: newQuantity, // Always add quantities when adding products
           pricePerQuantity: product.pricePerQuantity,
           photo: product.photo ?? existing.photo,
           unitType: product.unitType ?? existing.unitType,
@@ -339,16 +407,8 @@ class DatabaseService {
 
   Future<void> addToSyncQueue(SyncItem item) async {
     final db = await database;
-    await db.insert('sync_queue', {
-      'id': item.id,
-      'entity_id': item.entityId,
-      'entity_type': item.entityType,
-      'operation': item.operation.index,
-      'data': jsonEncode(item.data),
-      'timestamp': item.timestamp.toIso8601String(),
-      'status': item.status.index,
-      'error_message': item.errorMessage,
-    });
+    // Use the toMap method which now properly handles JSON serialization
+    await db.insert('sync_queue', item.toMap());
   }
 
   Future<List<SyncItem>> getPendingSyncItems() async {
@@ -436,37 +496,142 @@ class DatabaseService {
 
   Future<Product> addProductWithSync(Product product) async {
     try {
-      // Minimize logging for better performance
+      print('Starting addProductWithSync for product: ${product.name}');
+
+      // Validate product data before proceeding
+      if (product.barcode.isEmpty) {
+        throw Exception('Product barcode cannot be empty');
+      }
+      if (product.name.isEmpty) {
+        throw Exception('Product name cannot be empty');
+      }
+
+      // Normalize photo path for Windows if needed
+      String? normalizedPhotoPath = product.photo;
+      if (normalizedPhotoPath != null && Platform.isWindows) {
+        normalizedPhotoPath = normalizedPhotoPath.replaceAll('\\', '/');
+        print('Normalized photo path: $normalizedPhotoPath');
+      }
+
+      // Generate sync ID and timestamp
       final syncId = const Uuid().v4();
       final now = DateTime.now();
+      print('Generated syncId: $syncId');
 
+      // Create product with sync info
       final productWithSync = product.copyWith(
         syncId: syncId,
         lastSynced: now,
+        photo: normalizedPhotoPath, // Use normalized path
       );
+      print('Created product with sync info');
 
       // Use optimized batch operation instead of separate calls
+      print('Getting database instance');
       final db = await database;
-      final addedProduct = await DatabaseBatchUtil.addProductWithHistory(
-        db,
-        productWithSync,
-        ProductHistory(
+
+      // First check if a product with this barcode already exists
+      print('Checking if product with barcode ${product.barcode} already exists');
+      final existing = await getProductByBarcode(product.barcode);
+
+      if (existing != null) {
+        print('Product with barcode ${product.barcode} already exists, updating instead');
+
+        // Update the existing product
+        final int newQuantity = (existing.quantity ?? 0) + (product.quantity ?? 0);
+        print('Merging quantities: ${existing.quantity ?? 0} + ${product.quantity ?? 0} = $newQuantity');
+
+        final updatedProduct = existing.copyWith(
+          name: product.name,
+          quantity: newQuantity,
+          pricePerQuantity: product.pricePerQuantity,
+          photo: normalizedPhotoPath ?? existing.photo,
+          unitType: product.unitType ?? existing.unitType,
+          size: product.size ?? existing.size,
+          color: product.color ?? existing.color,
+          material: product.material ?? existing.material,
+          weight: product.weight ?? existing.weight,
+          rentPrice: product.rentPrice ?? existing.rentPrice,
+          updatedAt: DateTime.now(),
+          syncId: syncId,
+          lastSynced: now,
+        );
+
+        // Update the product directly
+        print('Updating existing product');
+        await updateProduct(updatedProduct);
+
+        // Add history entry
+        print('Adding history entry for updated product');
+        final history = ProductHistory(
           id: 0,
-          productId: 0, // Will be updated in the batch operation
-          productName: product.name,
-          barcode: product.barcode,
+          productId: updatedProduct.id,
+          productName: updatedProduct.name,
+          barcode: updatedProduct.barcode,
           quantity: product.quantity ?? 0,
           type: HistoryType.added_stock,
           rentedDate: DateTime.now(),
           createdAt: DateTime.now(),
           syncId: const Uuid().v4(),
           lastSynced: now,
-        ),
+        );
+
+        await addHistory(history);
+
+        // Add to sync queue
+        await addToSyncQueue(SyncItem.fromProduct(updatedProduct, SyncOperation.update));
+
+        print('Product updated successfully with ID: ${updatedProduct.id}');
+        return updatedProduct;
+      }
+
+      // For new products, use the batch operation
+      print('Creating history object for new product');
+      final history = ProductHistory(
+        id: 0,
+        productId: 0, // Will be updated in the batch operation
+        productName: product.name,
+        barcode: product.barcode,
+        quantity: product.quantity ?? 0,
+        type: HistoryType.added_stock,
+        rentedDate: DateTime.now(),
+        createdAt: DateTime.now(),
+        syncId: const Uuid().v4(),
+        lastSynced: now,
       );
 
-      return addedProduct;
+      // Try the batch operation first
+      try {
+        print('Calling DatabaseBatchUtil.addProductWithHistory');
+        final addedProduct = await DatabaseBatchUtil.addProductWithHistory(
+          db,
+          productWithSync,
+          history,
+        );
+        print('Product added successfully with ID: ${addedProduct.id}');
+        return addedProduct;
+      } catch (batchError) {
+        // If batch operation fails, try direct insertion
+        print('Batch operation failed: $batchError');
+        print('Trying direct insertion as fallback');
+
+        // Insert product directly
+        final id = await db.insert('products', productWithSync.toMap(includeId: false));
+        final newProduct = productWithSync.copyWith(id: id);
+
+        // Update history with product ID
+        final updatedHistory = history.copyWith(productId: id);
+        await db.insert('product_history', updatedHistory.toMap(includeId: false));
+
+        // Add to sync queue
+        await addToSyncQueue(SyncItem.fromProduct(newProduct, SyncOperation.add));
+
+        print('Direct insertion successful, product ID: $id');
+        return newProduct;
+      }
     } catch (e) {
       print('Error in addProductWithSync: $e');
+      print('Stack trace: ${StackTrace.current}');
       rethrow;
     }
   }

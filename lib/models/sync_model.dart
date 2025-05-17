@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:uuid/uuid.dart';
 import 'product_model.dart';
 import 'history_model.dart';
@@ -50,25 +51,73 @@ class SyncItem {
   }
 
   Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'entity_id': entityId,
-      'entity_type': entityType,
-      'operation': operation.index,
-      'data': data,
-      'timestamp': timestamp.toIso8601String(),
-      'status': status.index,
-      'error_message': errorMessage,
-    };
+    try {
+      // Ensure data is properly serializable
+      final serializedData = Map<String, dynamic>.from(data);
+
+      // Convert any non-serializable values to strings
+      serializedData.forEach((key, value) {
+        if (value is DateTime) {
+          serializedData[key] = value.toIso8601String();
+        }
+      });
+
+      // Convert the data map to a JSON string for database storage
+      final jsonData = jsonEncode(serializedData);
+
+      return {
+        'id': id,
+        'entity_id': entityId,
+        'entity_type': entityType,
+        'operation': operation.index,
+        'data': jsonData, // Store as JSON string, not as a Map
+        'timestamp': timestamp.toIso8601String(),
+        'status': status.index,
+        'error_message': errorMessage,
+      };
+    } catch (e) {
+      print('Error serializing SyncItem: $e');
+      print('Problematic data: $data');
+      // Provide a fallback with minimal data
+      return {
+        'id': id,
+        'entity_id': entityId,
+        'entity_type': entityType,
+        'operation': operation.index,
+        'data': jsonEncode({'error': 'Failed to serialize data: $e'}), // Still encode as JSON string
+        'timestamp': timestamp.toIso8601String(),
+        'status': status.index, // Use current status instead of error
+        'error_message': 'Serialization error: $e',
+      };
+    }
   }
 
   factory SyncItem.fromMap(Map<String, dynamic> map) {
+    Map<String, dynamic> dataMap;
+    try {
+      // Handle data field which could be a JSON string or a Map
+      if (map['data'] is String) {
+        // Parse JSON string
+        dataMap = jsonDecode(map['data'] as String);
+      } else if (map['data'] is Map) {
+        // Already a Map
+        dataMap = Map<String, dynamic>.from(map['data'] as Map);
+      } else {
+        // Fallback
+        dataMap = {};
+        print('Warning: Unexpected data type in SyncItem: ${map['data'].runtimeType}');
+      }
+    } catch (e) {
+      print('Error parsing data in SyncItem.fromMap: $e');
+      dataMap = {};
+    }
+
     return SyncItem(
       id: map['id'] as String,
       entityId: map['entity_id'] as String,
       entityType: map['entity_type'] as String,
       operation: SyncOperation.values[map['operation'] as int],
-      data: Map<String, dynamic>.from(map['data'] as Map),
+      data: dataMap,
       timestamp: DateTime.parse(map['timestamp'] as String),
       status: SyncStatus.values[map['status'] as int],
       errorMessage: map['error_message'] as String?,
@@ -81,14 +130,14 @@ class SyncBatch {
   final String deviceId;
   final List<SyncItem> items;
   final DateTime timestamp;
-  
+
   SyncBatch({
     required this.id,
     required this.deviceId,
     required this.items,
     required this.timestamp,
   });
-  
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -97,7 +146,7 @@ class SyncBatch {
       'timestamp': timestamp.toIso8601String(),
     };
   }
-  
+
   factory SyncBatch.fromMap(Map<String, dynamic> map) {
     return SyncBatch(
       id: map['id'] as String,
@@ -117,7 +166,7 @@ class DeviceInfo {
   final int port;
   final DeviceRole role;
   final DateTime lastSeen;
-  
+
   DeviceInfo({
     required this.id,
     required this.name,
@@ -126,7 +175,7 @@ class DeviceInfo {
     required this.role,
     required this.lastSeen,
   });
-  
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -137,7 +186,7 @@ class DeviceInfo {
       'last_seen': lastSeen.toIso8601String(),
     };
   }
-  
+
   factory DeviceInfo.fromMap(Map<String, dynamic> map) {
     return DeviceInfo(
       id: map['id'] as String,

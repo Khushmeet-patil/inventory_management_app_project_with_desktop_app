@@ -48,31 +48,108 @@ class DatabaseBatchUtil {
     Product? addedProduct;
 
     try {
+      print('Starting database transaction for adding product');
       await db.transaction((txn) async {
-        // Insert product
-        final productId = await txn.insert(
+        print('Checking if product with barcode ${product.barcode} already exists');
+        // Check if a product with this barcode already exists
+        final List<Map<String, dynamic>> existingProducts = await txn.query(
+          'products',
+          where: 'barcode = ?',
+          whereArgs: [product.barcode],
+        );
+        print('Query result: ${existingProducts.length} existing products found');
+
+        int productId;
+
+        if (existingProducts.isNotEmpty) {
+          // Product exists, update it instead of inserting
+          final existingProduct = Product.fromMap(existingProducts.first);
+          print('Product with barcode ${product.barcode} already exists in batch, updating instead');
+
+          // IMPORTANT: Always add quantities when adding a product that already exists
+          // This ensures we don't lose data during sync
+          final int newQuantity = (existingProduct.quantity ?? 0) + (product.quantity ?? 0);
+          print('Batch merging quantities: ${existingProduct.quantity ?? 0} + ${product.quantity ?? 0} = $newQuantity');
+
+          // Update the existing product
+          final updatedProduct = existingProduct.copyWith(
+            name: product.name,
+            quantity: newQuantity, // Always add quantities when adding products
+            pricePerQuantity: product.pricePerQuantity,
+            photo: product.photo ?? existingProduct.photo,
+            unitType: product.unitType ?? existingProduct.unitType,
+            size: product.size ?? existingProduct.size,
+            color: product.color ?? existingProduct.color,
+            material: product.material ?? existingProduct.material,
+            weight: product.weight ?? existingProduct.weight,
+            rentPrice: product.rentPrice ?? existingProduct.rentPrice,
+            updatedAt: DateTime.now(),
+            syncId: product.syncId ?? existingProduct.syncId,
+            lastSynced: DateTime.now(),
+          );
+
+          // Update the product
+          await txn.update(
             'products',
-            product.toMap(includeId: false),
-            conflictAlgorithm: ConflictAlgorithm.replace
-        );
+            updatedProduct.toMap(),
+            where: 'id = ?',
+            whereArgs: [updatedProduct.id],
+          );
 
-        // Create product with new ID
-        addedProduct = product.copyWith(id: productId);
+          productId = updatedProduct.id;
+          addedProduct = updatedProduct;
+        } else {
+          // Insert new product
+          print('Inserting new product: ${product.name}');
+          try {
+            final productMap = product.toMap(includeId: false);
+            print('Product map for insertion: $productMap');
+            productId = await txn.insert(
+                'products',
+                productMap,
+                conflictAlgorithm: ConflictAlgorithm.replace
+            );
+            print('Product inserted with ID: $productId');
 
-        // Insert history with the new product ID
+            // Create product with new ID
+            addedProduct = product.copyWith(id: productId);
+            print('Created product object with new ID');
+          } catch (e) {
+            print('Error inserting product: $e');
+            print('Stack trace: ${StackTrace.current}');
+            rethrow;
+          }
+        }
+
+        // Insert history with the product ID
+        print('Creating history entry for product ID: $productId');
         final updatedHistory = history.copyWith(productId: productId);
-        await txn.insert(
-            'product_history',
-            updatedHistory.toMap(includeId: false),
-            conflictAlgorithm: ConflictAlgorithm.replace
-        );
+        try {
+          final historyMap = updatedHistory.toMap(includeId: false);
+          print('History map for insertion: $historyMap');
+          await txn.insert(
+              'product_history',
+              historyMap,
+              conflictAlgorithm: ConflictAlgorithm.replace
+          );
+          print('History entry inserted successfully');
 
-        // Add to sync queue
-        await txn.insert(
-            'sync_queue',
-            SyncItem.fromProduct(addedProduct!, SyncOperation.add).toMap(),
-            conflictAlgorithm: ConflictAlgorithm.replace
-        );
+          // Add to sync queue
+          print('Adding product to sync queue');
+          final syncItem = SyncItem.fromProduct(addedProduct!, SyncOperation.add);
+          final syncMap = syncItem.toMap();
+          print('Sync item map for insertion: $syncMap');
+          await txn.insert(
+              'sync_queue',
+              syncMap,
+              conflictAlgorithm: ConflictAlgorithm.replace
+          );
+          print('Product added to sync queue successfully');
+        } catch (e) {
+          print('Error inserting history or sync item: $e');
+          print('Stack trace: ${StackTrace.current}');
+          rethrow;
+        }
       });
     } catch (e) {
       // Handle the error

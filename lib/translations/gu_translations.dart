@@ -117,6 +117,10 @@ final Map<String, String> guTranslations = {
   'client': 'ક્લાયન્ટ',
   'processing_rental': 'ભાડાની પ્રક્રિયા ચાલુ છે...',
   'processing_return': 'પરત પ્રક્રિયા ચાલુ છે...',
+  'scan_barcode': 'બારકોડ સ્કેન કરો',
+  'manual_entry': 'મેન્યુઅલ એન્ટ્રી',
+  'enter_barcode_manually': 'બારકોડ મેન્યુઅલી દાખલ કરો',
+  'confirm': 'પુષ્ટિ કરો',
 
   // Edit Product
   'edit_product': 'ઉત્પાદન સંપાદિત કરો',

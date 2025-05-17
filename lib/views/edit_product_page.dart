@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 import '../controllers/product_controller.dart';
 import '../models/product_model.dart';
 import '../utils/toast_util.dart';
