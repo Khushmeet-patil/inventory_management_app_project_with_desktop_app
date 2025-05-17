@@ -121,6 +121,8 @@ final Map<String, String> guTranslations = {
   'manual_entry': 'મેન્યુઅલ એન્ટ્રી',
   'enter_barcode_manually': 'બારકોડ મેન્યુઅલી દાખલ કરો',
   'confirm': 'પુષ્ટિ કરો',
+  'products_rented_successfully': 'પ્રોડક્ટ્સ સફળતાપૂર્વક ભાડે આપવામાં આવી',
+  'products_returned_successfully': 'પ્રોડક્ટ્સ સફળતાપૂર્વક પરત કરવામાં આવી',
 
   // Edit Product
   'edit_product': 'ઉત્પાદન સંપાદિત કરો',

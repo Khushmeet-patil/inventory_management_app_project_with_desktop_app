@@ -121,6 +121,8 @@ final Map<String, String> hiTranslations = {
   'manual_entry': 'मैनुअल प्रविष्टि',
   'enter_barcode_manually': 'बारकोड मैन्युअली दर्ज करें',
   'confirm': 'पुष्टि करें',
+  'products_rented_successfully': 'उत्पाद सफलतापूर्वक किराए पर दिए गए',
+  'products_returned_successfully': 'उत्पाद सफलतापूर्वक वापस किए गए',
 
   // Edit Product
   'edit_product': 'उत्पाद संपादित करें',

@@ -183,8 +183,8 @@ class _EditProductPageState extends State<EditProductPage> {
                   Expanded(
                     child: DropdownButtonFormField<String>(
                       decoration: InputDecoration(labelText: 'unit'.tr),
-                      value: _sizeUnitController.text.isEmpty ? null : _sizeUnitController.text,
-                      items: ['cm', 'mm', 'in', 'm'].map((String value) {
+                      value: _sizeUnitController.text.isEmpty ? 'cm' : _sizeUnitController.text,
+                      items: ['cm', 'mm', 'inch', 'm'].map((String value) {
                         return DropdownMenuItem<String>(
                           value: value,
                           child: Text(value),
@@ -252,8 +252,10 @@ class _EditProductPageState extends State<EditProductPage> {
   }
 
   void _updateProduct() async {
+    print('Update product button pressed');
     // Validate required fields
     if (_nameController.text.isEmpty || _priceController.text.isEmpty) {
+      print('Validation failed: Name or price is empty');
       ToastUtil.showError('fill_required_fields'.tr);
       return;
     }
@@ -264,12 +266,20 @@ class _EditProductPageState extends State<EditProductPage> {
     });
 
     try {
+      print('Creating updated product object');
+      // Normalize photo path for Windows if needed
+      String? normalizedPhotoPath = _photoPath;
+      if (normalizedPhotoPath != null && Platform.isWindows) {
+        normalizedPhotoPath = normalizedPhotoPath.replaceAll('\\', '/');
+        print('Normalized photo path: $normalizedPhotoPath');
+      }
+
       // Create updated product
       final updatedProduct = widget.product.copyWith(
         name: _nameController.text,
         quantity: int.tryParse(_numberOfUnitsController.text) ?? widget.product.quantity,
         pricePerQuantity: double.tryParse(_priceController.text) ?? widget.product.pricePerQuantity,
-        photo: _photoPath,
+        photo: normalizedPhotoPath,
         unitType: _unitTypeController.text.isEmpty ? null : _unitTypeController.text,
 
         size: (_sizeWidth.text.isNotEmpty && _sizeHeight.text.isNotEmpty && _sizeUnitController.text.isNotEmpty)
@@ -282,13 +292,32 @@ class _EditProductPageState extends State<EditProductPage> {
         updatedAt: DateTime.now(),
       );
 
+      print('Calling controller to update product: ID=${updatedProduct.id}, Name=${updatedProduct.name}');
       // Update the product
       await _controller.updateProduct(updatedProduct);
+      print('Product updated successfully');
 
-      // Return to previous screen
-      Get.back();
+      // Return to previous screen - use Navigator.pop for desktop platforms
+      if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+        print('Using Navigator.pop for desktop platform');
+        Navigator.of(context).pop();
+      } else {
+        print('Using Get.back for mobile platform');
+        Get.back();
+      }
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Product updated successfully')),
+      );
     } catch (e) {
+      print('Error updating product: $e');
+      print('Stack trace: ${StackTrace.current}');
+      // Show error in both toast and snackbar for reliability
       ToastUtil.showError('update_failed'.tr + ': $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update product: $e')),
+      );
     } finally {
       // Hide loading indicator if we're still on this screen
       if (mounted) {

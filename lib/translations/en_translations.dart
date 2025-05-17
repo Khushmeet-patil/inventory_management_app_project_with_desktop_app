@@ -132,6 +132,8 @@ final Map<String, String> enTranslations = {
   'manual_entry': 'Manual Entry',
   'enter_barcode_manually': 'Enter Barcode Manually',
   'confirm': 'Confirm',
+  'products_rented_successfully': 'Products rented successfully',
+  'products_returned_successfully': 'Products returned successfully',
 
   // Edit Product
   'edit_product': 'Edit Product',

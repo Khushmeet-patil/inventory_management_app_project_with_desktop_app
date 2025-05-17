@@ -75,6 +75,14 @@ class HomePage extends StatelessWidget {
                 _buildButton(context, 'view_stock'.tr, Icons.inventory, () => Get.toNamed('/stock')),
               ],
             ),
+            SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () => Get.toNamed('/test-notification'),
+              child: Text('Test Notifications'),
+              style: ElevatedButton.styleFrom(
+                padding: EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
           ],
           ),
         ),

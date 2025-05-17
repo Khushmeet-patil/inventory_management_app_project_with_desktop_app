@@ -338,7 +338,7 @@ class ProductController extends GetxController {
 
       // Show success message
       print('Showing success message');
-      ToastUtil.showSuccess('Products rented successfully');
+      ToastUtil.showSuccess('products_rented_successfully'.tr);
     } catch (e) {
       print('Error batch renting products: $e');
       ToastUtil.showError('Failed to rent products: ${e.toString()}');
@@ -464,7 +464,7 @@ class ProductController extends GetxController {
 
       // Show success message
       print('Showing success message');
-      ToastUtil.showSuccess('Products returned successfully');
+      ToastUtil.showSuccess('products_returned_successfully'.tr);
     } catch (e) {
       print('Error batch returning products: $e');
       ToastUtil.showError('Failed to return products: ${e.toString()}');
