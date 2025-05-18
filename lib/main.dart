@@ -2,7 +2,6 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:awesome_notifications/awesome_notifications.dart';
 import 'views/home_page.dart';
 import 'views/add_product_page.dart';
 import 'views/edit_product_page.dart';
@@ -21,7 +20,6 @@ import 'services/notification_service.dart';
 import 'translations/app_translations.dart';
 import 'utils/toast_util.dart';
 import 'utils/windows_security_util.dart';
-import 'test_notification.dart';
 
 void main() async {
   // Ensure Flutter is initialized
@@ -36,34 +34,13 @@ void main() async {
     databaseFactory = databaseFactoryFfi;
   }
 
-  // Initialize notification service
+  // Initialize notification service (toast-only mode)
   try {
-    print('Initializing notification service...');
-
-    // Set up notification action handler first
-    AwesomeNotifications().setListeners(
-      onActionReceivedMethod: NotificationService.onActionReceivedMethod,
-      onNotificationCreatedMethod: (receivedNotification) async {
-        print('Notification created: ${receivedNotification.toMap()}');
-        return;
-      },
-      onNotificationDisplayedMethod: (receivedNotification) async {
-        print('Notification displayed: ${receivedNotification.toMap()}');
-        return;
-      },
-      onDismissActionReceivedMethod: (receivedAction) async {
-        print('Notification dismissed: ${receivedAction.toMap()}');
-        return;
-      },
-    );
-
-    // Initialize the notification service
+    print('Initializing notification service (toast-only mode)...');
     await NotificationService.instance.initialize();
-
     print('Notification service initialized successfully');
-  } catch (e, stackTrace) {
+  } catch (e) {
     print('Error initializing notification service: $e');
-    print('Stack trace: $stackTrace');
     // Continue anyway, as notifications are not critical for app functionality
   }
 
@@ -119,7 +96,6 @@ class InventoryApp extends StatelessWidget {
           name: '/edit-product',
           page: () => EditProductPage(product: Get.arguments),
         ),
-        GetPage(name: '/test-notification', page: () => TestNotificationPage()),
       ],
       initialRoute: '/',
     );
