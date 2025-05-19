@@ -84,6 +84,7 @@ class _EditProductPageState extends State<EditProductPage> {
       body: Padding(
         padding: EdgeInsets.all(16.0),
         child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
           child: Column(
             children: [
               // Display barcode (non-editable)

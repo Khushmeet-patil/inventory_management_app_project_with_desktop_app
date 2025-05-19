@@ -10,11 +10,13 @@ final Map<String, String> enTranslations = {
   'nav_network': 'Network',
 
   // Home page
+  'welcome_message': 'Welcome to Inventory App',
   'total_products': 'Total Products',
   'add_product': 'Add Product',
   'rent_product': 'Rent Product',
   'return_product': 'Return Product',
   'view_stock': 'View Stock',
+  'view_all_stocks': 'View All Stocks',
 
   // Sync messages
   'syncing': 'Syncing',
@@ -126,6 +128,8 @@ final Map<String, String> enTranslations = {
   // Common
   'server': 'Server',
   'client': 'Client',
+  'notifications': 'Notifications',
+  'no_new_notifications': 'No new notifications',
   'processing_rental': 'Processing rental...',
   'processing_return': 'Processing return...',
   'scan_barcode': 'Scan Barcode',

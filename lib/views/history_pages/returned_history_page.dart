@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'dart:io';
 import '../../controllers/product_controller.dart';
 import '../../services/sync_service.dart';
 import '../../models/history_model.dart';
+import 'package:intl/intl.dart';
 
 class ReturnHistoryPage extends StatelessWidget {
   final ProductController _controller = Get.find();
@@ -83,45 +85,209 @@ class ReturnHistoryPage extends StatelessWidget {
           onRefresh: _refreshData,
           child: ListView.builder(
             physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.zero,
             itemCount: groupedHistory.length,
             itemBuilder: (context, index) {
               final group = groupedHistory[index];
               final items = group['items'] as List<ProductHistory>;
+              final DateTime createdAt = group['createdAt'] as DateTime;
+              final String formattedDate = DateFormat('MMM dd, yyyy').format(createdAt);
+              final String formattedTime = DateFormat('HH:mm').format(createdAt);
 
-              // If there's only one item in the group, display it as before
-              if (items.length == 1) {
-                final history = items.first;
-                return Card(
-                  child: ListTile(
-                    leading: Icon(Icons.assignment_return, color: Colors.teal),
-                    title: Text(history.productName),
-                    subtitle: Text(
-                        'Barcode: ${history.barcode}\nUnits: ${history.quantity}, By: ${history.givenTo}, Agency: ${history.agency ?? 'N/A'}, Notes: ${history.notes ?? 'N/A'}'),
-                    trailing: Text(history.createdAt.toString().substring(0, 16)),
+              // Determine if we should show agency or person name
+              final String agency = group['agency'] as String? ?? '';
+              final String personName = group['givenTo'] as String? ?? '';
+              final String displayName = agency.isNotEmpty ? agency : personName;
+              final bool hasAgency = agency.isNotEmpty;
+              final String notes = group['notes'] as String? ?? 'N/A';
+
+              return Card(
+                margin: EdgeInsets.symmetric(vertical: 4),
+                elevation: 1,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+                child: ExpansionTile(
+                  leading: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Color(0xFFdb8970).withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(Icons.assignment_return, color: Color(0xFFdb8970)),
                   ),
-                );
-              }
-              // If there are multiple items, display them in a single card
-              else {
-                return Card(
-                  child: ExpansionTile(
-                    leading: Icon(Icons.assignment_return, color: Colors.teal),
-                    title: Text('Multiple Products (${items.length})'),
-                    subtitle: Text(
-                        'By: ${group['givenTo']}, Agency: ${group['agency'] ?? 'N/A'}, Notes: ${group['notes'] ?? 'N/A'}'),
-                    trailing: Text(group['createdAt'].toString().substring(0, 16)),
-                    children: items.map((item) => ListTile(
-                      contentPadding: EdgeInsets.only(left: 32.0, right: 16.0),
-                      title: Text(item.productName),
-                      subtitle: Text('Barcode: ${item.barcode}, Units: ${item.quantity}'),
-                    )).toList(),
+                  title: Text(
+                    displayName,
+                    style: TextStyle(fontWeight: FontWeight.bold),
                   ),
-                );
-              }
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(height: 4),
+                      // If we're showing agency, also show person name as secondary info
+                      if (hasAgency)
+                        Text(
+                          'Person: $personName',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Icon(Icons.calendar_today, size: 12, color: Colors.grey),
+                          SizedBox(width: 4),
+                          Text(
+                            '$formattedDate at $formattedTime',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                        ],
+                      ),
+                      if (notes != 'N/A')
+                        Padding(
+                          padding: EdgeInsets.only(top: 2),
+                          child: Row(
+                            children: [
+                              Icon(Icons.note, size: 12, color: Colors.grey),
+                              SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  'Notes: $notes',
+                                  style: TextStyle(fontSize: 12),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                  trailing: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Color(0xFFdb8970).withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${items.length} ${items.length == 1 ? 'item' : 'items'}',
+                      style: TextStyle(color: Color(0xFFdb8970), fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Divider(height: 1, thickness: 1),
+                        Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Text(
+                            'Products',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          ),
+                        ),
+                        ...items.map((item) => _buildProductItem(item)).toList(),
+                      ],
+                    ),
+                  ],
+                ),
+              );
             },
           ),
         );
       }),
+    );
+  }
+
+  // Get product photo path by product ID
+  String? _getProductPhotoById(int productId) {
+    try {
+      final product = _controller.products.firstWhere((p) => p.id == productId);
+      return product.photo;
+    } catch (e) {
+      print('Product not found for ID: $productId');
+      return null;
+    }
+  }
+
+  // Build individual product item widget
+  Widget _buildProductItem(ProductHistory item) {
+    // Get product photo
+    final String? photoPath = _getProductPhotoById(item.productId);
+
+    return Container(
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        border: Border(top: BorderSide(color: Colors.grey.shade200, width: 1)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Product image
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              color: Color(0xFFdb8970).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: photoPath != null && photoPath.isNotEmpty
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.file(
+                    File(photoPath),
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Center(child: Icon(Icons.inventory, color: Color(0xFFdb8970)));
+                    },
+                  ),
+                )
+              : Center(child: Icon(Icons.inventory, color: Color(0xFFdb8970))),
+          ),
+          SizedBox(width: 12),
+          // Product details
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.productName,
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Color(0xFFdb8970),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'Qty: ${item.quantity}',
+                        style: TextStyle(color: Colors.white, fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 8),
+                Row(
+                  children: [
+                    Icon(Icons.qr_code, size: 14, color: Colors.grey),
+                    SizedBox(width: 4),
+                    Text(
+                      'Barcode: ${item.barcode}',
+                      style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

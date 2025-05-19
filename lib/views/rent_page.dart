@@ -153,7 +153,9 @@ class _RentPageState extends State<RentPage> {
       appBar: AppBar(title: Text('rent_products'.tr)),
       body: Padding(
         padding: EdgeInsets.all(16.0),
-        child: Column(
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
           children: [
             TextField(
               controller: _personController,
@@ -164,8 +166,10 @@ class _RentPageState extends State<RentPage> {
               decoration: InputDecoration(labelText: 'agency_name_optional'.tr, prefixIcon: Icon(Icons.business)),
             ),
             SizedBox(height: 20),
-            Expanded(
+            Container(
+              height: 300,
               child: ListView.builder(
+                physics: const AlwaysScrollableScrollPhysics(),
                 itemCount: _rentList.length,
                 itemBuilder: (context, index) {
                   final item = _rentList[index];
@@ -200,6 +204,7 @@ class _RentPageState extends State<RentPage> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

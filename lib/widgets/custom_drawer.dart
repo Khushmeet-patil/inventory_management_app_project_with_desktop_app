@@ -9,7 +9,7 @@ class CustomDrawer extends StatelessWidget {
         children: [
           DrawerHeader(
             child: Text('inventory_menu'.tr, style: TextStyle(fontSize: 24, color: Colors.white)),
-            decoration: BoxDecoration(color: Colors.teal),
+            decoration: BoxDecoration(color: Theme.of(context).primaryColor),
           ),
           ListTile(
             leading: Icon(Icons.inventory),

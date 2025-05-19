@@ -2,7 +2,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:awesome_notifications/awesome_notifications.dart';
+
 import 'views/home_page.dart';
 import 'views/add_product_page.dart';
 import 'views/edit_product_page.dart';
@@ -17,11 +17,33 @@ import 'controllers/product_controller.dart';
 import 'controllers/settings_controller.dart';
 import 'controllers/language_controller.dart';
 import 'services/database_services.dart';
-import 'services/notification_service.dart';
+
 import 'translations/app_translations.dart';
 import 'utils/toast_util.dart';
 import 'utils/windows_security_util.dart';
-import 'test_notification.dart';
+import 'utils/desktop_scroll_behavior.dart';
+
+// Create a MaterialColor from the hex color #f78e81 (Light Coral/Salmon)
+MaterialColor createMaterialColor(Color color) {
+  List<double> strengths = <double>[.05, .1, .2, .3, .4, .5, .6, .7, .8, .9];
+  Map<int, Color> swatch = <int, Color>{};
+  final int r = color.red, g = color.green, b = color.blue;
+
+  for (var strength in strengths) {
+    final double ds = 0.5 - strength;
+    swatch[(strength * 1000).round()] = Color.fromRGBO(
+      r + ((ds < 0 ? r : (255 - r)) * ds).round(),
+      g + ((ds < 0 ? g : (255 - g)) * ds).round(),
+      b + ((ds < 0 ? b : (255 - b)) * ds).round(),
+      1,
+    );
+  }
+  return MaterialColor(color.value, swatch);
+}
+
+// Define the primary color from hex #f78e81
+final MaterialColor primaryColor = createMaterialColor(Color(0xFFf78e81));
+
 
 void main() async {
   // Ensure Flutter is initialized
@@ -34,37 +56,6 @@ void main() async {
     sqfliteFfiInit();
     // Change the default factory
     databaseFactory = databaseFactoryFfi;
-  }
-
-  // Initialize notification service
-  try {
-    print('Initializing notification service...');
-
-    // Set up notification action handler first
-    AwesomeNotifications().setListeners(
-      onActionReceivedMethod: NotificationService.onActionReceivedMethod,
-      onNotificationCreatedMethod: (receivedNotification) async {
-        print('Notification created: ${receivedNotification.toMap()}');
-        return;
-      },
-      onNotificationDisplayedMethod: (receivedNotification) async {
-        print('Notification displayed: ${receivedNotification.toMap()}');
-        return;
-      },
-      onDismissActionReceivedMethod: (receivedAction) async {
-        print('Notification dismissed: ${receivedAction.toMap()}');
-        return;
-      },
-    );
-
-    // Initialize the notification service
-    await NotificationService.instance.initialize();
-
-    print('Notification service initialized successfully');
-  } catch (e, stackTrace) {
-    print('Error initializing notification service: $e');
-    print('Stack trace: $stackTrace');
-    // Continue anyway, as notifications are not critical for app functionality
   }
 
   // Pre-initialize database service
@@ -90,11 +81,12 @@ class InventoryApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Inventory Management',
       navigatorKey: ToastUtil.navigatorKey, // Important for toast notifications
+      scrollBehavior: DesktopScrollBehavior(), // Enable mouse wheel scrolling
       theme: ThemeData(
-        primarySwatch: Colors.teal,
+        primarySwatch: primaryColor,
         visualDensity: VisualDensity.adaptivePlatformDensity,
         cardTheme: CardTheme(elevation: 4, margin: EdgeInsets.all(8)),
-        buttonTheme: ButtonThemeData(buttonColor: Colors.teal, textTheme: ButtonTextTheme.primary),
+        buttonTheme: ButtonThemeData(buttonColor: primaryColor, textTheme: ButtonTextTheme.primary),
       ),
       initialBinding: BindingsBuilder(() {
         Get.put(ProductController());
@@ -119,7 +111,6 @@ class InventoryApp extends StatelessWidget {
           name: '/edit-product',
           page: () => EditProductPage(product: Get.arguments),
         ),
-        GetPage(name: '/test-notification', page: () => TestNotificationPage()),
       ],
       initialRoute: '/',
     );
@@ -185,7 +176,7 @@ class _MainPageState extends State<MainPage> {
           BottomNavigationBarItem(icon: Icon(Icons.assignment_return), label: 'nav_return'.tr),
           BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'settings_title'.tr),
         ],
-        selectedItemColor: Colors.teal,
+        selectedItemColor: primaryColor,
         unselectedItemColor: Colors.grey,
         backgroundColor: Colors.white,
         elevation: 8,

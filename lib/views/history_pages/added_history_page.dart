@@ -44,7 +44,7 @@ class AddedProductHistoryPage extends StatelessWidget {
             final history = _controller.addedProductHistory[index];
             return Card(
               child: ListTile(
-                leading: Icon(Icons.add_box, color: Colors.teal),
+                leading: Icon(Icons.add_box, color: Theme.of(context).primaryColor),
                 title: Text(history.productName),
                 subtitle: Text('Barcode: ${history.barcode}\nUnits: ${history.quantity}'),
                 trailing: Text(history.createdAt.toString().substring(0, 16)),

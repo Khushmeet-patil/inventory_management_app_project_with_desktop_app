@@ -152,7 +152,9 @@ class _ReturnPageState extends State<ReturnPage> {
       appBar: AppBar(title: Text('return_products'.tr)),
       body: Padding(
         padding: EdgeInsets.all(16.0),
-        child: Column(
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
           children: [
             TextField(
               controller: _personController,
@@ -163,8 +165,10 @@ class _ReturnPageState extends State<ReturnPage> {
               decoration: InputDecoration(labelText: 'agency_name_optional'.tr, prefixIcon: Icon(Icons.business)),
             ),
             SizedBox(height: 20),
-            Expanded(
+            Container(
+              height: 300,
               child: ListView.builder(
+                physics: const AlwaysScrollableScrollPhysics(),
                 itemCount: _returnList.length,
                 itemBuilder: (context, index) {
                   final item = _returnList[index];
@@ -199,6 +203,7 @@ class _ReturnPageState extends State<ReturnPage> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

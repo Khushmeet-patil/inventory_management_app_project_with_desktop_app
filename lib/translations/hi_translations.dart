@@ -10,11 +10,13 @@ final Map<String, String> hiTranslations = {
   'nav_network': 'नेटवर्क',
 
   // Home page
+  'welcome_message': 'इन्वेंटरी ऐप में आपका स्वागत है',
   'total_products': 'कुल उत्पाद',
   'add_product': 'उत्पाद जोड़ें',
   'rent_product': 'उत्पाद किराए पर लें',
   'return_product': 'उत्पाद वापस करें',
   'view_stock': 'स्टॉक देखें',
+  'view_all_stocks': 'सभी स्टॉक देखें',
 
   // Sync messages
   'syncing': 'सिंक हो रहा है',
@@ -115,6 +117,8 @@ final Map<String, String> hiTranslations = {
   // Common
   'server': 'सर्वर',
   'client': 'क्लाइंट',
+  'notifications': 'सूचनाएं',
+  'no_new_notifications': 'कोई नई सूचनाएं नहीं',
   'processing_rental': 'किराया प्रोसेस हो रहा है...',
   'processing_return': 'वापसी प्रोसेस हो रही है...',
   'scan_barcode': 'बारकोड स्कैन करें',

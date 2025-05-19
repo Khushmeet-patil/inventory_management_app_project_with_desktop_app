@@ -56,6 +56,7 @@ class _AddProductPageState extends State<AddProductPage> {
       body: Padding(
         padding: EdgeInsets.all(16.0),
         child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
           child: Column(
             children: [
               SwitchListTile(

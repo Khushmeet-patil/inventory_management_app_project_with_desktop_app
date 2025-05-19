@@ -40,6 +40,7 @@ class SettingsPage extends StatelessWidget {
       body: LayoutBuilder(
         builder: (context, constraints) {
           return SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
             child: ConstrainedBox(
               constraints: BoxConstraints(
                 minHeight: constraints.maxHeight,
@@ -553,15 +554,17 @@ class SettingsPage extends StatelessWidget {
             const SizedBox(height: 8),
             _buildManualServerIpInput(),
             const SizedBox(height: 8),
-            SizedBox(
-              height: 300, // Fixed height for mobile
+            Container(
+              constraints: BoxConstraints(maxHeight: 300),
               child: Obx(() => _controller.discoveredDevices.isEmpty
                   ? Center(child: Text('no_devices'.tr))
                   : ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      shrinkWrap: true,
                       itemCount: _controller.discoveredDevices.length,
                       itemBuilder: (context, index) {
                         final device = _controller.discoveredDevices[index];
-                        return _buildDeviceListTile(device);
+                        return _buildDeviceListTile(device, context);
                       },
                     ),
               ),
@@ -603,15 +606,17 @@ class SettingsPage extends StatelessWidget {
             const SizedBox(height: 8),
             _buildManualServerIpInput(),
             const SizedBox(height: 8),
-            SizedBox(
-              height: 400, // Taller for desktop
+            Container(
+              constraints: BoxConstraints(maxHeight: 400),
               child: Obx(() => _controller.discoveredDevices.isEmpty
                   ? Center(child: Text('no_devices'.tr))
                   : ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      shrinkWrap: true,
                       itemCount: _controller.discoveredDevices.length,
                       itemBuilder: (context, index) {
                         final device = _controller.discoveredDevices[index];
-                        return _buildDeviceListTile(device);
+                        return _buildDeviceListTile(device, context);
                       },
                     ),
               ),
@@ -666,13 +671,13 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  Widget _buildDeviceListTile(DeviceInfo device) {
+  Widget _buildDeviceListTile(DeviceInfo device, BuildContext context) {
     return ListTile(
       leading: Icon(
         device.role == DeviceRole.server
             ? Icons.computer
             : Icons.phone_android,
-        color: Colors.teal,
+        color: Theme.of(context).primaryColor,
       ),
       title: Text(device.name),
       subtitle: Text('${device.ipAddress}:${device.port}'),
@@ -720,6 +725,8 @@ class SettingsPage extends StatelessWidget {
   }
 
   Widget _buildLanguageSection() {
+    return Builder(
+      builder: (BuildContext context) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -751,13 +758,13 @@ class SettingsPage extends StatelessWidget {
                   onTap: () => _languageController.changeLanguage(language['code']),
                   child: Chip(
                     backgroundColor: _languageController.currentLanguage.value == language['code']
-                        ? Colors.teal.shade100
+                        ? Theme.of(context).primaryColor.withOpacity(0.2)
                         : null,
                     avatar: Text(language['flag']),
                     label: Text(language['name']),
                     side: BorderSide(
                       color: _languageController.currentLanguage.value == language['code']
-                          ? Colors.teal
+                          ? Theme.of(context).primaryColor
                           : Colors.grey.shade300,
                       width: _languageController.currentLanguage.value == language['code'] ? 2 : 1,
                     ),
@@ -768,6 +775,8 @@ class SettingsPage extends StatelessWidget {
           ],
         ),
       ),
+    );
+      },
     );
   }
 }

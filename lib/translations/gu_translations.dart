@@ -10,11 +10,13 @@ final Map<String, String> guTranslations = {
   'nav_network': 'નેટવર્ક',
 
   // Home page
+  'welcome_message': 'ઇન્વેન્ટરી એપમાં આપનું સ્વાગત છે',
   'total_products': 'કુલ ઉત્પાદનો',
   'add_product': 'ઉત્પાદન ઉમેરો',
   'rent_product': 'ઉત્પાદન ભાડે લો',
   'return_product': 'ઉત્પાદન પરત કરો',
   'view_stock': 'સ્ટોક જુઓ',
+  'view_all_stocks': 'બધા સ્ટોક જુઓ',
 
   // Sync messages
   'syncing': 'સિંક થઈ રહ્યું છે',
@@ -115,6 +117,8 @@ final Map<String, String> guTranslations = {
   // Common
   'server': 'સર્વર',
   'client': 'ક્લાયન્ટ',
+  'notifications': 'સૂચનાઓ',
+  'no_new_notifications': 'કોઈ નવી સૂચનાઓ નથી',
   'processing_rental': 'ભાડાની પ્રક્રિયા ચાલુ છે...',
   'processing_return': 'પરત પ્રક્રિયા ચાલુ છે...',
   'scan_barcode': 'બારકોડ સ્કેન કરો',
