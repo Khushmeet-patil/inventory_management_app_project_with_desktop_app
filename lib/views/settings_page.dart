@@ -36,6 +36,10 @@ class SettingsPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text('settings_title'.tr),
+        backgroundColor: const Color(0xFFdb8970),
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+        titleTextStyle: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {

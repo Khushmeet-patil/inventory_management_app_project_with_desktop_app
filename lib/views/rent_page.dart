@@ -141,7 +141,13 @@ class _RentPageState extends State<RentPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('rent_products'.tr)),
+      appBar: AppBar(
+        title: Text('rent_products'.tr),
+        backgroundColor: const Color(0xFFdb8970),
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+        titleTextStyle: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+      ),
       body: Padding(
         padding: EdgeInsets.all(16.0),
         child: SingleChildScrollView(
@@ -186,13 +192,11 @@ class _RentPageState extends State<RentPage> {
                   label: Text('add_product'.tr),
                   onPressed: _addProduct,
                 ),
-                _isLoading
-                  ? Center(child: CircularProgressIndicator())
-                  : ElevatedButton.icon(
-                      icon: Icon(Icons.check),
-                      label: Text('confirm_rent'.tr),
-                      onPressed: _confirmRent,
-                    ),
+                ElevatedButton.icon(
+                  icon: Icon(Icons.check),
+                  label: Text('confirm_rent'.tr),
+                  onPressed: _isLoading ? null : _confirmRent,
+                ),
               ],
             ),
           ],

@@ -140,7 +140,13 @@ class _ReturnPageState extends State<ReturnPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('return_products'.tr)),
+      appBar: AppBar(
+        title: Text('return_products'.tr),
+        backgroundColor: const Color(0xFFdb8970),
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+        titleTextStyle: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+      ),
       body: Padding(
         padding: EdgeInsets.all(16.0),
         child: SingleChildScrollView(
@@ -185,13 +191,11 @@ class _ReturnPageState extends State<ReturnPage> {
                   label: Text('add_product'.tr),
                   onPressed: _addProduct,
                 ),
-                _isLoading
-                  ? Center(child: CircularProgressIndicator())
-                  : ElevatedButton.icon(
-                      icon: Icon(Icons.check),
-                      label: Text('confirm_return'.tr),
-                      onPressed: _confirmReturn,
-                    ),
+                ElevatedButton.icon(
+                  icon: Icon(Icons.check),
+                  label: Text('confirm_return'.tr),
+                  onPressed: _isLoading ? null : _confirmReturn,
+                ),
               ],
             ),
           ],

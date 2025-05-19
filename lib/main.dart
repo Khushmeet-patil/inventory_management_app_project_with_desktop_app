@@ -111,7 +111,13 @@ class InventoryApp extends StatelessWidget {
         visualDensity: VisualDensity.adaptivePlatformDensity,
         cardTheme: const CardTheme(elevation: 4, margin: EdgeInsets.all(8)),
         buttonTheme: ButtonThemeData(buttonColor: primaryColor, textTheme: ButtonTextTheme.primary),
-        appBarTheme: AppBarTheme(backgroundColor: primaryColor),
+        appBarTheme: AppBarTheme(
+          backgroundColor: primaryColor,
+          foregroundColor: Colors.white,
+          iconTheme: const IconThemeData(color: Colors.white),
+          titleTextStyle: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+          actionsIconTheme: const IconThemeData(color: Colors.white),
+        ),
         // Optimize text rendering
         textTheme: Typography.material2018().black.apply(fontFamily: 'Roboto'),
         // Optimize scrolling

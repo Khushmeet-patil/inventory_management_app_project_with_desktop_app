@@ -67,10 +67,11 @@ class RentalHistoryPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Color(0xFFdb8970),
+        backgroundColor: const Color(0xFFdb8970),
         elevation: 0,
-        iconTheme: IconThemeData(color: Colors.white),
-        title: Text('rental_history'.tr, style: TextStyle(color: Colors.white)),
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: Text('rental_history'.tr),
+        titleTextStyle: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
       ),
       body: Obx(() {
         // Group the history items by transaction ID
