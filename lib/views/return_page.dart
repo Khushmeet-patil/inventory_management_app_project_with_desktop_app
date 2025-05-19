@@ -15,6 +15,7 @@ class _ReturnPageState extends State<ReturnPage> {
   final _personController = TextEditingController();
   final _agencyController = TextEditingController();
   List<Map<String, dynamic>> _returnList = [];
+  bool _isLoading = false;
 
   void _addProduct() {
     String barcode = '';
@@ -107,21 +108,9 @@ class _ReturnPageState extends State<ReturnPage> {
     }
 
     // Show loading indicator
-    final loadingDialog = showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          content: Row(
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(width: 20),
-              Text('processing_return'.tr),
-            ],
-          ),
-        );
-      },
-    );
+    setState(() {
+      _isLoading = true;
+    });
 
     try {
       print('Calling batch return products method');
@@ -133,16 +122,18 @@ class _ReturnPageState extends State<ReturnPage> {
       );
       print('Batch return completed successfully');
 
-      // Close loading dialog
-      Navigator.of(context).pop();
-
       // Return to previous screen
       Get.back();
     } catch (e) {
-      // Close loading dialog on error
-      Navigator.of(context).pop();
       print('Error in batch return: $e');
       ToastUtil.showError('Error: ${e.toString()}');
+
+      // Hide loading indicator if we're still on this screen
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -194,11 +185,13 @@ class _ReturnPageState extends State<ReturnPage> {
                   label: Text('add_product'.tr),
                   onPressed: _addProduct,
                 ),
-                ElevatedButton.icon(
-                  icon: Icon(Icons.check),
-                  label: Text('confirm_return'.tr),
-                  onPressed: _confirmReturn,
-                ),
+                _isLoading
+                  ? Center(child: CircularProgressIndicator())
+                  : ElevatedButton.icon(
+                      icon: Icon(Icons.check),
+                      label: Text('confirm_return'.tr),
+                      onPressed: _confirmReturn,
+                    ),
               ],
             ),
           ],
