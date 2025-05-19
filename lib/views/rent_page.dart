@@ -17,74 +17,249 @@ class _RentPageState extends State<RentPage> {
   List<Map<String, dynamic>> _rentList = [];
   bool _isLoading = false;
 
-  void _addProduct() {
-    String barcode = '';
-    int quantity = 0;
-    int rentalDays = 0;
+  void _addProduct() async {
+    // Check if person name is entered
+    if (_personController.text.isEmpty) {
+      ToastUtil.showError('enter_person_name_first'.tr);
+      return;
+    }
 
-    Get.dialog(
-      AlertDialog(
-        title: Text('add_product_to_rent'.tr),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    decoration: InputDecoration(labelText: 'barcode'.tr),
-                    onChanged: (value) => barcode = value,
-                  ),
-                ),
-                IconButton(
-                  icon: Icon(Icons.qr_code_scanner),
-                  onPressed: () async {
-                    final scannedBarcode = await BarcodeScannerUtil.scanBarcode(context);
-                    if (scannedBarcode != null) {
-                      barcode = scannedBarcode;
-                      setState(() {});
-                    }
-                  },
-                ),
-              ],
-            ),
-            TextField(
-              decoration: InputDecoration(labelText: 'number_of_units'.tr),
-              keyboardType: TextInputType.number,
-              onChanged: (value) => quantity = int.tryParse(value) ?? 0,
-            ),
-            TextField(
-              decoration: InputDecoration(labelText: 'rental_days'.tr),
-              keyboardType: TextInputType.number,
-              onChanged: (value) => rentalDays = int.tryParse(value) ?? 0,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              if (barcode.isNotEmpty && quantity > 0 && rentalDays > 0) {
-                setState(() {
-                  _rentList.add({
-                    'barcode': barcode,
-                    'quantity': quantity,
-                    'rentalDays': rentalDays,
-                  });
-                });
-                Get.back();
-              } else {
-                try {
-                  ToastUtil.showError('fill_all_fields_correctly'.tr);
-                } catch (e) {
-                  print('Error showing toast: $e');
-                }
-              }
-            },
-            child: Text('add'.tr),
-          ),
-        ],
+    // Variables for barcode entry
+    String? barcode;
+    final TextEditingController barcodeController = TextEditingController();
+
+    // Show bottom sheet for barcode entry
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-    );
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            left: 16,
+            right: 16,
+            top: 16,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Title
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16.0),
+                child: Text(
+                  'add_product'.tr,
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+
+              // Barcode field with scan button
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      decoration: InputDecoration(
+                        labelText: 'barcode'.tr,
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (value) => barcode = value,
+                      autofocus: true,
+                      controller: barcodeController,
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  ElevatedButton.icon(
+                    icon: Icon(Icons.qr_code_scanner),
+                    label: Text('scan'.tr),
+                    onPressed: () async {
+                      // Scan barcode
+                      final scannedBarcode = await BarcodeScannerUtil.scanBarcode(context);
+                      if (scannedBarcode != null) {
+                        // Update the text field with scanned barcode
+                        setSheetState(() {
+                          barcodeController.text = scannedBarcode;
+                          barcode = scannedBarcode;
+                        });
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFdb8970),
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+
+              SizedBox(height: 24),
+
+              // Buttons
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text('cancel'.tr),
+                  ),
+                  SizedBox(width: 16),
+                  ElevatedButton(
+                    onPressed: () {
+                      // Get the final value from the controller
+                      final finalBarcode = barcodeController.text.isNotEmpty ?
+                          barcodeController.text : barcode;
+
+                      if (finalBarcode != null && finalBarcode.isNotEmpty) {
+                        Navigator.pop(context, finalBarcode);
+                      } else {
+                        ToastUtil.showError('enter_barcode'.tr);
+                      }
+                    },
+                    child: Text('next'.tr),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFdb8970),
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+    ).then((result) async {
+      // Handle result from first bottom sheet
+      if (result == null) {
+        return; // User cancelled
+      }
+
+      barcode = result; // User entered or scanned barcode
+
+      // Variables for quantity and rental days
+      int quantity = 0;
+      int rentalDays = 0;
+      final quantityController = TextEditingController();
+      final rentalDaysController = TextEditingController();
+
+      // Show second bottom sheet for quantity and rental days
+      await showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (context) => Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            left: 16,
+            right: 16,
+            top: 16,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Title
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16.0),
+                child: Text(
+                  'product_details'.tr,
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+
+              // Display the barcode
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Text('barcode'.tr + ': ', style: TextStyle(fontWeight: FontWeight.bold)),
+                    Expanded(child: Text(barcode!)),
+                  ],
+                ),
+              ),
+
+              SizedBox(height: 16),
+
+              // Quantity field
+              TextField(
+                controller: quantityController,
+                decoration: InputDecoration(
+                  labelText: 'number_of_units'.tr,
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+                autofocus: true,
+                onChanged: (value) => quantity = int.tryParse(value) ?? 0,
+              ),
+
+              SizedBox(height: 16),
+
+              // Rental days field
+              TextField(
+                controller: rentalDaysController,
+                decoration: InputDecoration(
+                  labelText: 'rental_days'.tr,
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+                onChanged: (value) => rentalDays = int.tryParse(value) ?? 0,
+              ),
+
+              SizedBox(height: 24),
+
+              // Buttons
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text('cancel'.tr),
+                  ),
+                  SizedBox(width: 16),
+                  ElevatedButton(
+                    onPressed: () {
+                      if (quantity > 0 && rentalDays > 0) {
+                        setState(() {
+                          _rentList.add({
+                            'barcode': barcode!,
+                            'quantity': quantity,
+                            'rentalDays': rentalDays,
+                          });
+                        });
+                        Navigator.pop(context);
+                      } else {
+                        try {
+                          ToastUtil.showError('fill_all_fields_correctly'.tr);
+                        } catch (e) {
+                          print('Error showing toast: $e');
+                        }
+                      }
+                    },
+                    child: Text('add'.tr),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFdb8970),
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 16),
+            ],
+          ),
+        ),
+      );
+    });
   }
 
   void _confirmRent() async {

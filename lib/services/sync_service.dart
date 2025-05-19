@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:get/get.dart';
 import 'package:uuid/uuid.dart';
 import '../models/sync_model.dart';
@@ -8,6 +9,7 @@ import '../models/history_model.dart';
 import '../controllers/product_controller.dart';
 import 'database_services.dart';
 import 'network_service.dart';
+import '../utils/windows_notification_util.dart';
 
 class SyncService {
   static final SyncService instance = SyncService._init();
@@ -368,12 +370,18 @@ class SyncService {
         // Show a notification if there are items in the batch
         if (batch.items.isNotEmpty) {
           try {
-            Get.snackbar(
-              'Data Updated',
-              'Received ${batch.items.length} updates from server',
-              duration: Duration(seconds: 2),
-              snackPosition: SnackPosition.BOTTOM,
-            );
+            if (Platform.isWindows) {
+              // Use Windows blue snackbar
+              WindowsNotificationUtil.showSyncCompleted(batch.items.length);
+            } else {
+              // Use regular snackbar for other platforms
+              Get.snackbar(
+                'Data Updated',
+                'Received ${batch.items.length} updates from server',
+                duration: Duration(seconds: 2),
+                snackPosition: SnackPosition.BOTTOM,
+              );
+            }
           } catch (e) {
             print('Error showing notification: $e');
           }

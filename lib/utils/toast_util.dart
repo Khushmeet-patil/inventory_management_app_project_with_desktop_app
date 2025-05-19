@@ -196,10 +196,13 @@ class ToastUtil {
     // Use GetX snackbar for Windows with improved visibility
     Get.closeAllSnackbars(); // Close any existing snackbars first
 
+    // Always use blue color for Windows platform as requested
+    final Color blueColor = Colors.blue.shade700;
+
     Get.snackbar(
       'Notification',  // Title
       message,
-      backgroundColor: backgroundColor,
+      backgroundColor: blueColor,
       colorText: Colors.white,
       snackPosition: SnackPosition.BOTTOM,
       duration: const Duration(seconds: 5),  // Longer duration for better visibility

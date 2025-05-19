@@ -1,11 +1,15 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:uuid/uuid.dart';
 import '../models/product_model.dart';
 import '../models/history_model.dart';
 import '../services/database_services.dart';
 import '../services/sync_service.dart';
+import '../services/notification_service.dart';
 import '../utils/toast_util.dart';
+import '../utils/windows_notification_util.dart';
 
 class ProductController extends GetxController {
   final DatabaseService _dbService = DatabaseService.instance;
@@ -111,7 +115,13 @@ class ProductController extends GetxController {
       // Show success message
       print('Showing success message');
       try {
-        ToastUtil.showSuccess('Product added successfully');
+        if (Platform.isWindows) {
+          // Use Windows blue snackbar
+          WindowsNotificationUtil.showProductAdded(product.name, product.quantity ?? 0);
+        } else {
+          // Use toast for other platforms
+          ToastUtil.showSuccess('Product added successfully');
+        }
       } catch (toastError) {
         print('Error showing success toast: $toastError');
         // Continue execution even if toast fails
@@ -182,7 +192,17 @@ class ProductController extends GetxController {
 
         // Show success message
         try {
-          ToastUtil.showSuccess('Stock added successfully');
+          if (Platform.isWindows) {
+            // Use Windows blue snackbar
+            WindowsNotificationUtil.showNotification(
+              'Stock Added',
+              'Added $quantity units of ${product.name}',
+              icon: Icons.add_box
+            );
+          } else {
+            // Use toast for other platforms
+            ToastUtil.showSuccess('Stock added successfully');
+          }
         } catch (toastError) {
           print('Error showing toast: $toastError');
         }
@@ -264,7 +284,13 @@ class ProductController extends GetxController {
 
           // Show success message
           try {
-            ToastUtil.showSuccess('Product rented successfully');
+            if (Platform.isWindows) {
+              // Use Windows blue snackbar
+              WindowsNotificationUtil.showProductRented(product.name, quantity, givenTo);
+            } else {
+              // Use toast for other platforms
+              ToastUtil.showSuccess('Product rented successfully');
+            }
           } catch (toastError) {
             print('Error showing toast: $toastError');
           }
@@ -338,7 +364,17 @@ class ProductController extends GetxController {
 
       // Show success message
       print('Showing success message');
-      ToastUtil.showSuccess('products_rented_successfully'.tr);
+      if (Platform.isWindows) {
+        // Use Windows blue snackbar
+        WindowsNotificationUtil.showNotification(
+          'Products Rented',
+          'Successfully rented ${rentItems.length} products to $givenTo',
+          icon: Icons.shopping_cart
+        );
+      } else {
+        // Use toast for other platforms
+        ToastUtil.showSuccess('products_rented_successfully'.tr);
+      }
     } catch (e) {
       print('Error batch renting products: $e');
       ToastUtil.showError('Failed to rent products: ${e.toString()}');
@@ -398,7 +434,13 @@ class ProductController extends GetxController {
 
         // Show success message
         try {
-          ToastUtil.showSuccess('Product returned successfully');
+          if (Platform.isWindows) {
+            // Use Windows blue snackbar
+            WindowsNotificationUtil.showProductReturned(product.name, quantity, returnedBy);
+          } else {
+            // Use toast for other platforms
+            ToastUtil.showSuccess('Product returned successfully');
+          }
         } catch (toastError) {
           print('Error showing toast: $toastError');
         }
@@ -464,7 +506,17 @@ class ProductController extends GetxController {
 
       // Show success message
       print('Showing success message');
-      ToastUtil.showSuccess('products_returned_successfully'.tr);
+      if (Platform.isWindows) {
+        // Use Windows blue snackbar
+        WindowsNotificationUtil.showNotification(
+          'Products Returned',
+          'Successfully returned ${returnItems.length} products by $returnedBy',
+          icon: Icons.assignment_return
+        );
+      } else {
+        // Use toast for other platforms
+        ToastUtil.showSuccess('products_returned_successfully'.tr);
+      }
     } catch (e) {
       print('Error batch returning products: $e');
       ToastUtil.showError('Failed to return products: ${e.toString()}');
@@ -487,7 +539,17 @@ class ProductController extends GetxController {
 
       // Show success message
       try {
-        ToastUtil.showSuccess('Product deleted successfully');
+        if (Platform.isWindows) {
+          // Use Windows blue snackbar
+          WindowsNotificationUtil.showNotification(
+            'Product Deleted',
+            'Deleted product: ${product.name}',
+            icon: Icons.delete
+          );
+        } else {
+          // Use toast for other platforms
+          ToastUtil.showSuccess('Product deleted successfully');
+        }
       } catch (toastError) {
         print('Error showing toast: $toastError');
       }
@@ -523,7 +585,17 @@ class ProductController extends GetxController {
 
       // Show success message
       try {
-        ToastUtil.showSuccess('Product updated successfully');
+        if (Platform.isWindows) {
+          // Use Windows blue snackbar
+          WindowsNotificationUtil.showNotification(
+            'Product Updated',
+            'Updated product: ${product.name}',
+            icon: Icons.edit
+          );
+        } else {
+          // Use toast for other platforms
+          ToastUtil.showSuccess('Product updated successfully');
+        }
       } catch (toastError) {
         print('Error showing toast: $toastError');
       }

@@ -14,6 +14,7 @@ import 'package:uuid/uuid.dart';
 import '../models/sync_model.dart';
 import '../models/product_model.dart';
 import 'database_services.dart';
+import '../utils/windows_notification_util.dart';
 
 class NetworkService {
   static final NetworkService instance = NetworkService._init();
@@ -331,6 +332,9 @@ class NetworkService {
                       isConnectedToServer.value = true;
                       connectedServerName.value = serverDevice.name;
                       connectedServerIp.value = serverDevice.ipAddress;
+
+                      // Show Windows notification
+                      WindowsNotificationUtil.showServerConnected(serverDevice.name, serverDevice.ipAddress);
                     }
                   }
                 }
@@ -498,6 +502,10 @@ class NetworkService {
               connectedServerName.value = server.name;
               connectedServerIp.value = server.ipAddress;
               print('Connected to server via UDP broadcast: ${server.name} (${server.ipAddress})');
+
+              // Show Windows notification
+              WindowsNotificationUtil.showServerConnected(server.name, server.ipAddress);
+
               _consecutiveSuccessfulDiscoveries++;
               _consecutiveFailedDiscoveries = 0;
               discoverySuccess = true;
@@ -520,6 +528,10 @@ class NetworkService {
             connectedServerName.value = server.name;
             connectedServerIp.value = server.ipAddress;
             print('Connected to server via UDP broadcast: ${server.name} (${server.ipAddress})');
+
+            // Show Windows notification
+            WindowsNotificationUtil.showServerConnected(server.name, server.ipAddress);
+
             _consecutiveSuccessfulDiscoveries++;
             _consecutiveFailedDiscoveries = 0;
             discoverySuccess = true;
@@ -543,6 +555,10 @@ class NetworkService {
         connectedServerName.value = server.name;
         connectedServerIp.value = server.ipAddress;
         print('Connected to server: ${server.name} (${server.ipAddress})');
+
+        // Show Windows notification
+        WindowsNotificationUtil.showServerConnected(server.name, server.ipAddress);
+
         _consecutiveSuccessfulDiscoveries++;
         _consecutiveFailedDiscoveries = 0;
         discoverySuccess = true;
@@ -882,6 +898,12 @@ class NetworkService {
       isConnectedToServer.value = true;
       connectedServerName.value = device.name;
       connectedServerIp.value = device.ipAddress;
+
+      // Show Windows notification
+      WindowsNotificationUtil.showServerConnected(device.name, device.ipAddress);
+    } else if (device.role == DeviceRole.client && deviceRole == DeviceRole.server) {
+      // If we're a server and found a client, show notification
+      WindowsNotificationUtil.showDeviceConnected(device.name, device.ipAddress);
     }
   }
 
@@ -1201,6 +1223,12 @@ class NetworkService {
                     connectedServerName.value = device.name;
                     connectedServerIp.value = device.ipAddress;
                     developer.log('Connected to server via UDP: ${device.name} (${device.ipAddress})');
+
+                    // Show Windows notification
+                    WindowsNotificationUtil.showServerConnected(device.name, device.ipAddress);
+                  } else if (device.role == DeviceRole.client && deviceRole == DeviceRole.server) {
+                    // If we're a server and found a client, show notification
+                    WindowsNotificationUtil.showDeviceConnected(device.name, device.ipAddress);
                   }
                 }
               } catch (e) {
