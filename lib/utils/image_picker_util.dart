@@ -117,72 +117,86 @@ class ImagePickerUtil {
     }
   }
 
+  // Cached image instances to avoid rebuilding
+  static final Map<String, Widget> _cachedImages = {};
+  static final Map<String, DateTime> _cacheTimestamps = {};
+  static const Duration _cacheDuration = Duration(minutes: 10);
+
+  // Fallback widget for when image loading fails
+  static Widget _getFallbackWidget(double width, double height, {IconData icon = Icons.image_not_supported}) {
+    return Container(
+      width: width,
+      height: height,
+      color: Colors.grey[300],
+      child: Icon(icon, color: Colors.grey[600]),
+    );
+  }
+
   // Get image widget from path with caching
   static Widget getImageWidget(String? imagePath, {double width = 100, double height = 100}) {
+    // Return fallback widget if path is null or empty
     if (imagePath == null || imagePath.isEmpty) {
-      return Container(
-        width: width,
-        height: height,
-        color: Colors.grey[300],
-        child: Icon(Icons.image_not_supported, color: Colors.grey[600]),
-      );
+      return _getFallbackWidget(width, height);
+    }
+
+    // Create a cache key based on path and dimensions
+    final cacheKey = '${imagePath}_${width.toInt()}_${height.toInt()}';
+
+    // Check if we have a valid cached image
+    final now = DateTime.now();
+    if (_cachedImages.containsKey(cacheKey) &&
+        _cacheTimestamps.containsKey(cacheKey) &&
+        now.difference(_cacheTimestamps[cacheKey]!) < _cacheDuration) {
+      return _cachedImages[cacheKey]!;
     }
 
     try {
       // Check if the file exists locally
       final file = File(imagePath);
+      Widget imageWidget;
+
       if (file.existsSync()) {
-        // Use cached image provider for better performance
-        return Image.file(
+        // Check file size to avoid loading corrupted images
+        final fileSize = file.lengthSync();
+        if (fileSize <= 0) {
+          return _getFallbackWidget(width, height, icon: Icons.broken_image);
+        }
+
+        // Use memory efficient image loading
+        imageWidget = Image.file(
           file,
           width: width,
           height: height,
           fit: BoxFit.cover,
           cacheWidth: width.toInt() * 2, // Cache at 2x display size for better quality
+          gaplessPlayback: true, // Prevent flickering during image loading
+          filterQuality: FilterQuality.medium, // Balance between quality and performance
           errorBuilder: (context, error, stackTrace) {
             print('Error loading image: $error');
-            return Container(
-              width: width,
-              height: height,
-              color: Colors.grey[300],
-              child: Icon(Icons.broken_image, color: Colors.grey[600]),
-            );
+            return _getFallbackWidget(width, height, icon: Icons.broken_image);
           },
         );
+
+        // Cache the image widget
+        _cachedImages[cacheKey] = imageWidget;
+        _cacheTimestamps[cacheKey] = now;
+
+        return imageWidget;
       } else {
-        // If file doesn't exist locally, try to load from cache
-        return FutureBuilder<File>(
-          future: DefaultCacheManager().getSingleFile(imagePath),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.done &&
-                snapshot.hasData) {
-              return Image.file(
-                snapshot.data!,
-                width: width,
-                height: height,
-                fit: BoxFit.cover,
-                cacheWidth: width.toInt() * 2,
-              );
-            } else {
-              return Container(
-                width: width,
-                height: height,
-                color: Colors.grey[300],
-                child: Icon(Icons.hourglass_empty, color: Colors.grey[600]),
-              );
-            }
-          },
-        );
+        // If file doesn't exist locally, return fallback immediately
+        // This is more efficient than trying to load from cache which might fail
+        return _getFallbackWidget(width, height, icon: Icons.image_not_supported);
       }
     } catch (e) {
       print('Error creating image widget: $e');
-      return Container(
-        width: width,
-        height: height,
-        color: Colors.grey[300],
-        child: Icon(Icons.error, color: Colors.grey[600]),
-      );
+      return _getFallbackWidget(width, height, icon: Icons.error);
     }
+  }
+
+  // Clear the image cache
+  static void clearImageCache() {
+    _cachedImages.clear();
+    _cacheTimestamps.clear();
   }
 
   // Show image picker dialog

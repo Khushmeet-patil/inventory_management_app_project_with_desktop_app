@@ -471,6 +471,42 @@ class ProductController extends GetxController {
     }
   }
 
+  Future<void> deleteProduct(Product product) async {
+    try {
+      print('Deleting product: ID=${product.id}, Name=${product.name}');
+
+      // Delete the product from the database
+      final db = await _dbService.database;
+      await db.delete(
+        'products',
+        where: 'id = ?',
+        whereArgs: [product.id],
+      );
+
+      print('Product deleted successfully');
+
+      // Show success message
+      try {
+        ToastUtil.showSuccess('Product deleted successfully');
+      } catch (toastError) {
+        print('Error showing toast: $toastError');
+      }
+
+      // Reload data locally without waiting for sync
+      await loadData();
+
+      // Schedule a background sync
+      _syncService.syncImmediately().catchError((e) {
+        print('Background sync error: $e');
+        // Ignore sync errors to keep UI responsive
+      });
+    } catch (e) {
+      print('Error deleting product: $e');
+      ToastUtil.showError('Failed to delete product: ${e.toString()}');
+      rethrow;
+    }
+  }
+
   Future<void> updateProduct(Product product) async {
     try {
       print('Updating product: ID=${product.id}, Name=${product.name}');
@@ -499,7 +535,7 @@ class ProductController extends GetxController {
       });
 
       // Reload data locally without waiting for sync
-      loadData();
+      await loadData();
     } catch (e) {
       print('Error updating product: $e');
       try {
